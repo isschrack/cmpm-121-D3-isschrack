@@ -35,5 +35,5 @@ Key technical challenge: Can you assemble a map-based user interface using the L
 
 ### Crafting Requirements
 
-- [ ] Can place token on other equal value token to create new token with updated value
+- [x] Can place token on other equal value token to create new token with updated value
 - [ ] The game detects when the player has a token of sufficient value in hand

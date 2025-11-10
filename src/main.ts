@@ -173,28 +173,32 @@ function spawnCache(i: number, j: number) {
 
       if (playerToken) {
         // If player is holding a token, show crafting option
+        const canCraft = playerToken.value === initialValue;
         popupDiv.innerHTML = `
-        <div>Cell (${i},${j}) - Current value: ${initialValue}</div>
-        <button id="craft">Craft with held token (value ${playerToken.value})</button>
-        <button id="leave">Leave token</button>`;
+      <div>Cell (${i},${j}) - Current value: ${initialValue}</div>
+      <button id="craft" ${
+          canCraft ? "" : "disabled"
+        }>Craft with held token (value ${playerToken.value})</button>
+      <button id="leave">Leave token</button>`;
 
         popupDiv.querySelector("#craft")?.addEventListener("click", () => {
-          // Crafting logic - combine tokens
-          const newValue = playerToken!.value + initialValue;
-          playerToken = { i, j, value: newValue };
-          rect.removeFrom(map);
-          const cache = spawnedCaches.get(key);
-          if (cache && cache.marker) {
-            cache.marker.removeFrom(map);
-          }
-          spawnedCaches.delete(key);
-          updateStatusPanel();
+          // Crafting logic - combine tokens (only if values are equal)
+          if (canCraft) {
+            const newValue = playerToken!.value + initialValue;
+            playerToken = { i, j, value: newValue };
+            rect.removeFrom(map);
+            const cache = spawnedCaches.get(key);
+            if (cache && cache.marker) {
+              cache.marker.removeFrom(map);
+            }
+            spawnedCaches.delete(key);
+            updateStatusPanel();
 
-          // Check for win condition
-          if (newValue >= 200) {
-            alert("You've created a high-value token! You win!");
+            // Check for win condition
+            if (newValue >= 200) {
+              alert("You've created a high-value token! You win!");
+            }
           }
-
           map.closePopup();
         });
 
