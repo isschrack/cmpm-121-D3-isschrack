@@ -24,6 +24,22 @@ const statusPanelDiv = document.createElement("div");
 statusPanelDiv.id = "statusPanel";
 document.body.append(statusPanelDiv);
 
+// Add disclaimer about red tokens
+const disclaimerDiv = document.createElement("div");
+disclaimerDiv.id = "disclaimer";
+disclaimerDiv.innerHTML =
+  "<p><strong>Disclaimer:</strong> Red tokens are too far away and cannot be clicked.</p>";
+disclaimerDiv.style.cssText = `
+  background-color: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 5px;
+  padding: 10px;
+  margin: 10px;
+  text-align: center;
+  font-size: 14px;
+`;
+document.body.insertBefore(disclaimerDiv, statusPanelDiv);
+
 // Our classroom location
 const CLASSROOM_LATLNG = leaflet.latLng(
   36.997936938057016,
