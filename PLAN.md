@@ -16,19 +16,20 @@
 
 Key technical challenge: Can you assemble a map-based user interface using the Leaflet mapping framework?
 
-- [ ] Examine leaflet starter code
+- [x] Examine leaflet starter code
 
 ### Map Requirements
 
 - [ ] Cells generate to edge of the map
-- [ ] Limit cell interaction to those nearby (3 cells away)
-- [ ] Initial cell load state is consistent with different page loads
+- [x] Limit cell interaction to those nearby
+- [x] Initial cell load state is consistent with different page loads
+- [ ] Can see value of token without clicking on it
 
 ### Inventory Requirements
 
-- [ ] Can only pick up one cell at once
-- [ ] Picking up cell removes it from cell containing it
-- [ ] If you're holding the token then you can clearly see its value
+- [x] Can only pick up one cell at once
+- [x] Picking up cell removes it from cell containing it
+- [x] If you're holding the token then you can clearly see its value
 
 ### Crafting Requirements
 
