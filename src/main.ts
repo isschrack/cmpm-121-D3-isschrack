@@ -33,7 +33,6 @@ const CLASSROOM_LATLNG = leaflet.latLng(
 // Tunable gameplay parameters
 const GAMEPLAY_ZOOM_LEVEL = 19;
 const TILE_DEGREES = 1e-4;
-const NEIGHBORHOOD_SIZE = 3; // Limit interaction to 3 cells away
 const CACHE_SPAWN_PROBABILITY = 0.1;
 
 // Create the map
@@ -175,13 +174,18 @@ function spawnCache(i: number, j: number) {
 
 // Generate cells to edge of the map based on player position
 function generateMap() {
-  const center = map.getCenter();
-  const centerI = Math.floor(
-    (center.lat - CLASSROOM_LATLNG.lat) / TILE_DEGREES,
-  );
-  const centerJ = Math.floor(
-    (center.lng - CLASSROOM_LATLNG.lng) / TILE_DEGREES,
-  );
+  // Get the bounds of the visible map
+  const bounds = map.getBounds();
+  
+  // Calculate the cell indices for the corners of the visible map
+  const southwest = bounds.getSouthWest();
+  const northeast = bounds.getNorthEast();
+  
+  // Convert lat/lng to cell indices
+  const minI = Math.floor((southwest.lat - CLASSROOM_LATLNG.lat) / TILE_DEGREES);
+  const maxI = Math.floor((northeast.lat - CLASSROOM_LATLNG.lat) / TILE_DEGREES);
+  const minJ = Math.floor((southwest.lng - CLASSROOM_LATLNG.lng) / TILE_DEGREES);
+  const maxJ = Math.floor((northeast.lng - CLASSROOM_LATLNG.lng) / TILE_DEGREES);
 
   // Clear existing caches
   // deno-lint-ignore no-unused-vars
@@ -190,17 +194,9 @@ function generateMap() {
   });
   spawnedCaches.clear();
 
-  // Generate new caches around player
-  for (
-    let i = centerI - NEIGHBORHOOD_SIZE;
-    i <= centerI + NEIGHBORHOOD_SIZE;
-    i++
-  ) {
-    for (
-      let j = centerJ - NEIGHBORHOOD_SIZE;
-      j <= centerJ + NEIGHBORHOOD_SIZE;
-      j++
-    ) {
+  // Generate new caches to fill the visible map
+  for (let i = minI; i <= maxI; i++) {
+    for (let j = minJ; j <= maxJ; j++) {
       // Spawn caches based on luck function for consistency
       if (luck([i, j].toString()) < CACHE_SPAWN_PROBABILITY) {
         spawnCache(i, j);
