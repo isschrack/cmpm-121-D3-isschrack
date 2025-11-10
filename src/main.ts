@@ -99,6 +99,22 @@ function cellToBounds(i: number, j: number) {
   ]);
 }
 
+// Convert lat/lng to cell coordinates
+function latLngToCell(lat: number, lng: number): { i: number; j: number } {
+  const origin = CLASSROOM_LATLNG;
+  const i = Math.floor((lat - origin.lat) / TILE_DEGREES);
+  const j = Math.floor((lng - origin.lng) / TILE_DEGREES);
+  return { i, j };
+}
+
+// Calculate Manhattan distance between two cells
+function cellDistance(
+  cell1: { i: number; j: number },
+  cell2: { i: number; j: number },
+): number {
+  return Math.abs(cell1.i - cell2.i) + Math.abs(cell1.j - cell2.j);
+}
+
 // Add caches to the map by cell numbers
 function spawnCache(i: number, j: number) {
   const key = cellKey(i, j);
@@ -110,8 +126,19 @@ function spawnCache(i: number, j: number) {
 
   const bounds = cellToBounds(i, j);
 
+  // Check if token is more than 3 tiles away from player
+  const playerCell = latLngToCell(map.getCenter().lat, map.getCenter().lng);
+  const tokenCell = { i, j };
+  const distance = cellDistance(playerCell, tokenCell);
+  const isFarAway = distance > 3;
+
   // Add a rectangle to the map to represent the cache
-  const rect = leaflet.rectangle(bounds);
+  const rect = leaflet.rectangle(bounds, {
+    color: isFarAway ? "#ff0000" : "#3388ff", // Red if far away, default blue otherwise
+    fillColor: isFarAway ? "#ff0000" : "#3388ff",
+    fillOpacity: 0.2,
+    weight: isFarAway ? 2 : 5,
+  });
   rect.addTo(map);
 
   // Each cache has a random point value
@@ -124,7 +151,9 @@ function spawnCache(i: number, j: number) {
   const marker = leaflet.marker(center, {
     icon: leaflet.divIcon({
       className: "token-marker",
-      html: `<div class="token-value">${initialValue}</div>`,
+      html: `<div class="token-value${
+        isFarAway ? " far-away" : ""
+      }">${initialValue}</div>`,
       iconSize: [30, 30],
     }),
   });
@@ -137,70 +166,72 @@ function spawnCache(i: number, j: number) {
     marker,
   });
 
-  // Handle interactions with the cache
-  rect.bindPopup(() => {
-    const popupDiv = document.createElement("div");
+  // Handle interactions with the cache (only if not far away)
+  if (!isFarAway) {
+    rect.bindPopup(() => {
+      const popupDiv = document.createElement("div");
 
-    if (playerToken) {
-      // If player is holding a token, show crafting option
-      popupDiv.innerHTML = `
+      if (playerToken) {
+        // If player is holding a token, show crafting option
+        popupDiv.innerHTML = `
         <div>Cell (${i},${j}) - Current value: ${initialValue}</div>
         <button id="craft">Craft with held token (value ${playerToken.value})</button>
         <button id="leave">Leave token</button>`;
 
-      popupDiv.querySelector("#craft")?.addEventListener("click", () => {
-        // Crafting logic - combine tokens
-        const newValue = playerToken!.value + initialValue;
-        playerToken = { i, j, value: newValue };
-        rect.removeFrom(map);
-        const cache = spawnedCaches.get(key);
-        if (cache && cache.marker) {
-          cache.marker.removeFrom(map);
-        }
-        spawnedCaches.delete(key);
-        updateStatusPanel();
+        popupDiv.querySelector("#craft")?.addEventListener("click", () => {
+          // Crafting logic - combine tokens
+          const newValue = playerToken!.value + initialValue;
+          playerToken = { i, j, value: newValue };
+          rect.removeFrom(map);
+          const cache = spawnedCaches.get(key);
+          if (cache && cache.marker) {
+            cache.marker.removeFrom(map);
+          }
+          spawnedCaches.delete(key);
+          updateStatusPanel();
 
-        // Check for win condition
-        if (newValue >= 200) {
-          alert("You've created a high-value token! You win!");
-        }
+          // Check for win condition
+          if (newValue >= 200) {
+            alert("You've created a high-value token! You win!");
+          }
 
-        map.closePopup();
-      });
+          map.closePopup();
+        });
 
-      popupDiv.querySelector("#leave")?.addEventListener("click", () => {
-        // Put down the held token
-        spawnCache(playerToken!.i, playerToken!.j);
-        playerToken = null;
-        updateStatusPanel();
-        map.closePopup();
-      });
-    } else {
-      // If player is not holding a token, show pickup option
-      popupDiv.innerHTML = `
+        popupDiv.querySelector("#leave")?.addEventListener("click", () => {
+          // Put down the held token
+          spawnCache(playerToken!.i, playerToken!.j);
+          playerToken = null;
+          updateStatusPanel();
+          map.closePopup();
+        });
+      } else {
+        // If player is not holding a token, show pickup option
+        popupDiv.innerHTML = `
         <div>Cell (${i},${j}) - Token value: ${initialValue}</div>
         <button id="pickup">Pick up token</button>`;
 
-      popupDiv.querySelector("#pickup")?.addEventListener("click", () => {
-        // Pickup logic - remove from map and add to inventory
-        playerToken = { i, j, value: initialValue };
+        popupDiv.querySelector("#pickup")?.addEventListener("click", () => {
+          // Pickup logic - remove from map and add to inventory
+          playerToken = { i, j, value: initialValue };
 
-        // Mirror the crafting removal: remove rect, remove stored marker if present,
-        // then delete the cache entry.
-        rect.removeFrom(map);
-        const cache = spawnedCaches.get(key);
-        if (cache && cache.marker) {
-          cache.marker.removeFrom(map);
-        }
-        spawnedCaches.delete(key);
+          // Mirror the crafting removal: remove rect, remove stored marker if present,
+          // then delete the cache entry.
+          rect.removeFrom(map);
+          const cache = spawnedCaches.get(key);
+          if (cache && cache.marker) {
+            cache.marker.removeFrom(map);
+          }
+          spawnedCaches.delete(key);
 
-        updateStatusPanel();
-        map.closePopup();
-      });
-    }
+          updateStatusPanel();
+          map.closePopup();
+        });
+      }
 
-    return popupDiv;
-  });
+      return popupDiv;
+    });
+  }
 }
 
 // Generate cells to edge of the map based on player position

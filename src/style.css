@@ -28,3 +28,7 @@
   align-items: center;
   justify-content: center;
 }
+
+.token-value.far-away {
+  background-color: rgba(255, 0, 0, 0.7);
+}
