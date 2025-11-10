@@ -78,7 +78,11 @@ updateStatusPanel();
 // Store for spawned caches
 const spawnedCaches = new Map<
   string,
-  { rect: leaflet.Rectangle; value: number }
+  {
+    marker: leaflet.Marker | undefined;
+    rect: leaflet.Rectangle;
+    value: number;
+  }
 >();
 
 // Convert cell coordinates to a string key
@@ -115,8 +119,23 @@ function spawnCache(i: number, j: number) {
     luck([i, j, "initialValue"].toString()) * 100,
   );
 
+  // Add a marker with the token value displayed as text
+  const center = bounds.getCenter();
+  const marker = leaflet.marker(center, {
+    icon: leaflet.divIcon({
+      className: "token-marker",
+      html: `<div class="token-value">${initialValue}</div>`,
+      iconSize: [30, 30],
+    }),
+  });
+  marker.addTo(map);
+
   // Store the cache
-  spawnedCaches.set(key, { rect, value: initialValue });
+  spawnedCaches.set(key, {
+    rect,
+    value: initialValue,
+    marker,
+  });
 
   // Handle interactions with the cache
   rect.bindPopup(() => {
@@ -134,6 +153,10 @@ function spawnCache(i: number, j: number) {
         const newValue = playerToken!.value + initialValue;
         playerToken = { i, j, value: newValue };
         rect.removeFrom(map);
+        const cache = spawnedCaches.get(key);
+        if (cache && cache.marker) {
+          cache.marker.removeFrom(map);
+        }
         spawnedCaches.delete(key);
         updateStatusPanel();
 
@@ -176,16 +199,24 @@ function spawnCache(i: number, j: number) {
 function generateMap() {
   // Get the bounds of the visible map
   const bounds = map.getBounds();
-  
+
   // Calculate the cell indices for the corners of the visible map
   const southwest = bounds.getSouthWest();
   const northeast = bounds.getNorthEast();
-  
+
   // Convert lat/lng to cell indices
-  const minI = Math.floor((southwest.lat - CLASSROOM_LATLNG.lat) / TILE_DEGREES);
-  const maxI = Math.floor((northeast.lat - CLASSROOM_LATLNG.lat) / TILE_DEGREES);
-  const minJ = Math.floor((southwest.lng - CLASSROOM_LATLNG.lng) / TILE_DEGREES);
-  const maxJ = Math.floor((northeast.lng - CLASSROOM_LATLNG.lng) / TILE_DEGREES);
+  const minI = Math.floor(
+    (southwest.lat - CLASSROOM_LATLNG.lat) / TILE_DEGREES,
+  );
+  const maxI = Math.floor(
+    (northeast.lat - CLASSROOM_LATLNG.lat) / TILE_DEGREES,
+  );
+  const minJ = Math.floor(
+    (southwest.lng - CLASSROOM_LATLNG.lng) / TILE_DEGREES,
+  );
+  const maxJ = Math.floor(
+    (northeast.lng - CLASSROOM_LATLNG.lng) / TILE_DEGREES,
+  );
 
   // Clear existing caches
   // deno-lint-ignore no-unused-vars

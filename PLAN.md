@@ -20,10 +20,10 @@ Key technical challenge: Can you assemble a map-based user interface using the L
 
 ### Map Requirements
 
-- [ ] Cells generate to edge of the map
+- [x] Cells generate to edge of the map
 - [x] Limit cell interaction to those nearby
 - [x] Initial cell load state is consistent with different page loads
-- [ ] Can see value of token without clicking on it
+- [x] Can see value of token without clicking on it
 
 ### Inventory Requirements
 
