@@ -141,10 +141,13 @@ function spawnCache(i: number, j: number) {
   });
   rect.addTo(map);
 
-  // Each cache has a random point value
-  const initialValue = Math.floor(
-    luck([i, j, "initialValue"].toString()) * 100,
+  // Each cache has a point value based on powers of 2 (like 2048 game)
+  // Values will be 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024
+  const possibleValues = [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024];
+  const randomIndex = Math.floor(
+    luck([i, j, "initialValue"].toString()) * possibleValues.length,
   );
+  const initialValue = possibleValues[randomIndex];
 
   // Add a marker with the token value displayed as text
   const center = bounds.getCenter();
@@ -178,8 +181,7 @@ function spawnCache(i: number, j: number) {
       <div>Cell (${i},${j}) - Current value: ${initialValue}</div>
       <button id="craft" ${
           canCraft ? "" : "disabled"
-        }>Craft with held token (value ${playerToken.value})</button>
-      <button id="leave">Leave token</button>`;
+        }>Craft with held token (value ${playerToken.value})</button>`;
 
         popupDiv.querySelector("#craft")?.addEventListener("click", () => {
           // Crafting logic - combine tokens (only if values are equal)
@@ -194,19 +196,11 @@ function spawnCache(i: number, j: number) {
             spawnedCaches.delete(key);
             updateStatusPanel();
 
-            // Check for win condition
-            if (newValue >= 200) {
-              alert("You've created a high-value token! You win!");
+            // Check for win condition - reaching 2048 like in the 2048 game
+            if (newValue >= 2048) {
+              alert("You've created a 2048 token! You win!");
             }
           }
-          map.closePopup();
-        });
-
-        popupDiv.querySelector("#leave")?.addEventListener("click", () => {
-          // Put down the held token
-          spawnCache(playerToken!.i, playerToken!.j);
-          playerToken = null;
-          updateStatusPanel();
           map.closePopup();
         });
       } else {

@@ -4,7 +4,7 @@ BitWorld is a grid-based exploration and crafting game built with TypeScript and
 
 ## Game Overview
 
-In BitWorld, players explore a procedurally generated map divided into a grid of cells. Each cell may contain a token with a random value. The goal is to collect tokens and craft them together to create higher-value tokens, ultimately achieving a token value of 200 or more to win the game.
+In BitWorld, players explore a procedurally generated map divided into a grid of cells. Each cell may contain a token with a value based on powers of 2 (like in the 2048 game). The goal is to collect tokens and craft them together to create higher-value tokens, ultimately achieving a token value of 2048 to win the game.
 
 ## Core Mechanics
 
@@ -21,6 +21,12 @@ In BitWorld, players explore a procedurally generated map divided into a grid of
 - Tokens can be picked up from cells by interacting with them
 - When a token is picked up, it disappears from the cell
 - The value of tokens is visible without clicking on the cell
+
+### Token Values
+
+- Tokens now have values based on powers of 2: 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024
+- This creates a more consistent crafting experience similar to the 2048 game
+- Only tokens with matching values can be crafted together
 
 ### Crafting System
 
@@ -76,4 +82,4 @@ Run `deno task build` to create a production build in the `dist` folder.
 
 ## Win Condition
 
-Create a token with a value of 200 or higher by crafting tokens together.
+Create a token with a value of 2048 by crafting tokens together.
