@@ -184,8 +184,16 @@ function spawnCache(i: number, j: number) {
       popupDiv.querySelector("#pickup")?.addEventListener("click", () => {
         // Pickup logic - remove from map and add to inventory
         playerToken = { i, j, value: initialValue };
+
+        // Mirror the crafting removal: remove rect, remove stored marker if present,
+        // then delete the cache entry.
         rect.removeFrom(map);
+        const cache = spawnedCaches.get(key);
+        if (cache && cache.marker) {
+          cache.marker.removeFrom(map);
+        }
         spawnedCaches.delete(key);
+
         updateStatusPanel();
         map.closePopup();
       });
@@ -218,12 +226,24 @@ function generateMap() {
     (northeast.lng - CLASSROOM_LATLNG.lng) / TILE_DEGREES,
   );
 
-  // Clear existing caches
-  // deno-lint-ignore no-unused-vars
+  // Create a set of currently visible cells
+  const visibleCells = new Set<string>();
+  for (let i = minI; i <= maxI; i++) {
+    for (let j = minJ; j <= maxJ; j++) {
+      visibleCells.add(cellKey(i, j));
+    }
+  }
+
+  // Remove caches that are no longer visible
   spawnedCaches.forEach((cache, key) => {
-    cache.rect.removeFrom(map);
+    if (!visibleCells.has(key)) {
+      cache.rect.removeFrom(map);
+      if (cache.marker) {
+        cache.marker.removeFrom(map);
+      }
+      spawnedCaches.delete(key);
+    }
   });
-  spawnedCaches.clear();
 
   // Generate new caches to fill the visible map
   for (let i = minI; i <= maxI; i++) {
