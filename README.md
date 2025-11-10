@@ -1,4 +1,4 @@
-RE# BitWorld - CMPM 121 D3 Project
+# BitWorld - CMPM 121 D3 Project
 
 BitWorld is a grid-based exploration and crafting game built with TypeScript and Leaflet.js. Players navigate a map to collect tokens and combine them to create higher-value tokens.
 
