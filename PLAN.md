@@ -17,11 +17,13 @@
 Key technical challenge: Can you assemble a map-based user interface using the Leaflet mapping framework?
 
 - [x] Examine leaflet starter code
+- [x] Create initial README.md documentation
 
 ### Map Requirements
 
 - [x] Cells generate to edge of the map
 - [x] Limit cell interaction to those nearby
+  - [x] Add indicator that some cells are further away (they're red)
 - [x] Initial cell load state is consistent with different page loads
 - [x] Can see value of token without clicking on it
 
