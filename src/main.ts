@@ -338,6 +338,9 @@ let playerToken:
   | { i: number; j: number; rankIndex: number; name: string; value: number }
   | null = null;
 
+// Track if player has picked up their first token
+let hasPickedUpFirstToken = false;
+
 // Display the player's inventory
 function updateStatusPanel() {
   if (playerToken) {
@@ -423,6 +426,7 @@ function spawnCache(i: number, j: number) {
   });
   rect.addTo(map);
 
+  // For first-time spawning, only allow common tokens
   const initialRankIndex = getWeightedRankIndex(
     [i, j, "initialRank"].toString(),
   );
@@ -514,11 +518,28 @@ function spawnCache(i: number, j: number) {
           map.closePopup();
         });
       } else {
+        // Enforce rule: at game start (when player hasn't picked up any token yet)
+        // only allow picking up Common tokens (rankIndex === 0). After the
+        // first successful pickup set `hasPickedUpFirstToken = true` so normal
+        // pickups resume.
+        const initialRestrictionActive = !hasPickedUpFirstToken;
+        const canPickupInitial = !initialRestrictionActive ||
+          initialRankIndex === 0;
+
         popupDiv.innerHTML = `
-        <div>Cell (${i},${j}) - ${initialName} (${initialValue})</div>
-        <button id="pickup">Pick up token</button>`;
+          <div>Cell (${i},${j}) - ${initialName} (${initialValue})</div>
+          <button id="pickup" ${
+          canPickupInitial ? "" : "disabled"
+        }>Pick up token</button>
+          ${
+          initialRestrictionActive && !canPickupInitial
+            ? '<div style="color: #c0392b; font-size:12px; margin-top:6px;">At game start you may only pick up Common tokens.</div>'
+            : ""
+        }`;
 
         popupDiv.querySelector("#pickup")?.addEventListener("click", () => {
+          if (!canPickupInitial) return; // should be disabled, but guard anyway
+
           playerToken = {
             i,
             j,
@@ -526,6 +547,9 @@ function spawnCache(i: number, j: number) {
             name: initialName,
             value: initialValue,
           };
+
+          // Mark that the player has picked up their first token
+          if (!hasPickedUpFirstToken) hasPickedUpFirstToken = true;
 
           rect.removeFrom(map);
           const cache = spawnedCaches.get(key);
@@ -612,11 +636,25 @@ function showTokenDetails(
         <div>Cell (${i},${j}) - ${name} (${value})</div>
         <div style="color: red;">Too far away to interact!</div>`;
     } else {
+      // Enforce initial pickup restriction: only allow Common tokens until
+      // the player has picked up their first token.
+      const initialRestrictionActive = !hasPickedUpFirstToken;
+      const canPickupInitial = !initialRestrictionActive || rankIndex === 0;
+
       popupDiv.innerHTML = `
         <div>Cell (${i},${j}) - ${name} (${value})</div>
-        <button id="pickup">Pick up token</button>`;
+        <button id="pickup" ${
+        canPickupInitial ? "" : "disabled"
+      }>Pick up token</button>
+        ${
+        initialRestrictionActive && !canPickupInitial
+          ? '<div style="color: #c0392b; font-size:12px; margin-top:6px;">At game start you may only pick up Common tokens.</div>'
+          : ""
+      }`;
 
       popupDiv.querySelector("#pickup")?.addEventListener("click", () => {
+        if (!canPickupInitial) return; // guard in case disabled attr isn't respected
+
         playerToken = {
           i,
           j,
@@ -624,6 +662,9 @@ function showTokenDetails(
           name: name,
           value: value,
         };
+
+        // Mark that the player has picked up their first token
+        if (!hasPickedUpFirstToken) hasPickedUpFirstToken = true;
 
         // Remove cache from map and spawnedCaches
         const key = cellKey(i, j);
@@ -799,11 +840,26 @@ function updateCacheProximity() {
             map.closePopup();
           });
         } else {
+          // Enforce initial pickup restriction: only allow Common tokens until
+          // the player has picked up their first token.
+          const initialRestrictionActive = !hasPickedUpFirstToken;
+          const canPickupInitial = !initialRestrictionActive ||
+            cache.rankIndex === 0;
+
           popupDiv.innerHTML = `
         <div>Cell (${cache.i},${cache.j}) - ${cache.name} (${cache.value})</div>
-        <button id="pickup">Pick up token</button>`;
+        <button id="pickup" ${
+            canPickupInitial ? "" : "disabled"
+          }>Pick up token</button>
+        ${
+            initialRestrictionActive && !canPickupInitial
+              ? '<div style="color: #c0392b; font-size:12px; margin-top:6px;">At game start you may only pick up Common tokens.</div>'
+              : ""
+          }`;
 
           popupDiv.querySelector("#pickup")?.addEventListener("click", () => {
+            if (!canPickupInitial) return;
+
             playerToken = {
               i: cache.i,
               j: cache.j,
@@ -811,6 +867,10 @@ function updateCacheProximity() {
               name: cache.name,
               value: cache.value,
             };
+
+            // Mark that the player has picked up their first token
+            if (!hasPickedUpFirstToken) hasPickedUpFirstToken = true;
+
             cache.rect.removeFrom(map);
             if (cache.marker) cache.marker.removeFrom(map);
             spawnedCaches.delete(key);

@@ -45,7 +45,11 @@ Key technical challenge: Can you assemble a map-based user interface using the L
 - [x] Player movement buttons
 - [x] Cells should appear to be memoryless in the sense that they forget their state when they are no longer visible on the screen.
   - The player should be able to farm tokens by moving into and out of the visibility range of a cell.
-- [ ] Lower value ranked tokens should be more common on the map (probability system)
+- [x] Lower value ranked tokens should be more common on the map (probability system)
+
+#### Inventory Requirements
+
+- [x] You can only pick up common tokens when first spawning
 
 #### Crafting Requirements
 
