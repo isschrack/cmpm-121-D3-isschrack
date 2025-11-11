@@ -206,6 +206,24 @@ down.addEventListener("click", () => movePlayer(-1, 0));
 left.addEventListener("click", () => movePlayer(0, -1));
 right.addEventListener("click", () => movePlayer(0, 1));
 
+// Add WASD key movement controls
+document.addEventListener("keydown", (event) => {
+  switch (event.key.toLowerCase()) {
+    case "w":
+      movePlayer(1, 0); // North
+      break;
+    case "s":
+      movePlayer(-1, 0); // South
+      break;
+    case "a":
+      movePlayer(0, -1); // West
+      break;
+    case "d":
+      movePlayer(0, 1); // East
+      break;
+  }
+});
+
 const mapDiv = document.createElement("div");
 mapDiv.id = "map";
 document.body.append(mapDiv);
