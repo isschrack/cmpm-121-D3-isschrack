@@ -115,6 +115,25 @@ const CACHE_SPAWN_PROBABILITY = 0.1;
 // How many tiles from the player to consider for generation (anchors to player)
 // NOTE: visibility is now based on actual map viewport bounds.
 
+// Global rank definitions so spawn and proximity logic share the same progression
+const RANKS = [
+  { name: "Common", value: 2 },
+  { name: "Uncommon", value: 4 },
+  { name: "Rare", value: 8 },
+  { name: "Epic", value: 16 },
+  { name: "Legendary", value: 32 },
+  { name: "Mythic", value: 64 },
+  { name: "Ascendant", value: 128 },
+  { name: "Exalted", value: 256 },
+  { name: "Exotic", value: 512 },
+  { name: "Transcendent", value: 1024 },
+  { name: "Divine", value: 2048 },
+  { name: "Ancestral", value: 4096 },
+];
+// Value required to win. Use the top rank's numeric value by default so changing
+// the rank table automatically adjusts the victory threshold.
+const VICTORY_VALUE = RANKS[RANKS.length - 1].value;
+
 // Create the map
 const map = leaflet.map(mapDiv, {
   center: CLASSROOM_LATLNG,
@@ -140,13 +159,16 @@ playerMarker.bindTooltip("That's you!");
 playerMarker.addTo(map);
 
 // Player inventory - can only hold one token at a time
-let playerToken: { i: number; j: number; value: number } | null = null;
+// Tokens now have ranks. We store rankIndex, rank name, and numeric value.
+let playerToken:
+  | { i: number; j: number; rankIndex: number; name: string; value: number }
+  | null = null;
 
 // Display the player's inventory
 function updateStatusPanel() {
   if (playerToken) {
     statusPanelDiv.innerHTML =
-      `Holding token from cell (${playerToken.i}, ${playerToken.j}) with value ${playerToken.value}`;
+      `Holding ${playerToken.name} token (${playerToken.value}) from cell (${playerToken.i}, ${playerToken.j})`;
   } else {
     statusPanelDiv.innerHTML = "No token in hand";
   }
@@ -165,6 +187,8 @@ const spawnedCaches = new Map<
     rect: leaflet.Rectangle;
     value: number;
     isFarAway: boolean;
+    rankIndex: number;
+    name: string;
   }
 >();
 
@@ -225,13 +249,12 @@ function spawnCache(i: number, j: number) {
   });
   rect.addTo(map);
 
-  // Each cache has a point value based on powers of 2 (like 2048 game)
-  // Values will be 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024
-  const possibleValues = [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024];
   const randomIndex = Math.floor(
-    luck([i, j, "initialValue"].toString()) * possibleValues.length,
+    luck([i, j, "initialRank"].toString()) * RANKS.length,
   );
-  const initialValue = possibleValues[randomIndex];
+  const initialRankIndex = randomIndex;
+  const initialValue = RANKS[initialRankIndex].value;
+  const initialName = RANKS[initialRankIndex].name;
 
   // Add a marker with the token value displayed as text
   const center = bounds.getCenter();
@@ -240,8 +263,8 @@ function spawnCache(i: number, j: number) {
       className: "token-marker",
       html: `<div class="token-value${
         isFarAway ? " far-away" : ""
-      }">${initialValue}</div>`,
-      iconSize: [30, 30],
+      }"><div class="rank-name">${initialName}</div><div class="rank-value">${initialValue}</div></div>`,
+      iconSize: [36, 36],
     }),
   });
   marker.addTo(map);
@@ -254,6 +277,8 @@ function spawnCache(i: number, j: number) {
     value: initialValue,
     marker,
     isFarAway,
+    rankIndex: initialRankIndex,
+    name: initialName,
   });
 
   // Helper to (re)bind popup for a rect based on current playerToken
@@ -263,17 +288,30 @@ function spawnCache(i: number, j: number) {
       const popupDiv = document.createElement("div");
 
       if (playerToken) {
-        const canCraft = playerToken.value === initialValue;
+        // Can only craft when the held token is the same rank as the cache
+        const canCraft = playerToken.rankIndex === initialRankIndex;
         popupDiv.innerHTML = `
-      <div>Cell (${i},${j}) - Current value: ${initialValue}</div>
+      <div>Cell (${i},${j}) - ${initialName} (${initialValue})</div>
       <button id="craft" ${
           canCraft ? "" : "disabled"
-        }>Craft with held token (value ${playerToken.value})</button>`;
+        }>Craft with held token (${playerToken.name} ${playerToken.value})</button>`;
 
         popupDiv.querySelector("#craft")?.addEventListener("click", () => {
           if (canCraft) {
-            const newValue = playerToken!.value + initialValue;
-            playerToken = { i, j, value: newValue };
+            // Combine ranks to the next rank
+            const newRankIndex = Math.min(
+              playerToken!.rankIndex + 1,
+              RANKS.length - 1,
+            );
+            const newValue = RANKS[newRankIndex].value;
+            const newName = RANKS[newRankIndex].name;
+            playerToken = {
+              i,
+              j,
+              rankIndex: newRankIndex,
+              name: newName,
+              value: newValue,
+            };
             rect.removeFrom(map);
             const cache = spawnedCaches.get(key);
             if (cache && cache.marker) {
@@ -282,19 +320,27 @@ function spawnCache(i: number, j: number) {
             spawnedCaches.delete(key);
             updateStatusPanel();
 
-            if (newValue >= 2048) {
-              alert("You've created a 2048 token! You win!");
+            if (newValue >= VICTORY_VALUE) {
+              alert(
+                `You've created a ${newName} token (${newValue})! You win!`,
+              );
             }
           }
           map.closePopup();
         });
       } else {
         popupDiv.innerHTML = `
-        <div>Cell (${i},${j}) - Token value: ${initialValue}</div>
+        <div>Cell (${i},${j}) - ${initialName} (${initialValue})</div>
         <button id="pickup">Pick up token</button>`;
 
         popupDiv.querySelector("#pickup")?.addEventListener("click", () => {
-          playerToken = { i, j, value: initialValue };
+          playerToken = {
+            i,
+            j,
+            rankIndex: initialRankIndex,
+            name: initialName,
+            value: initialValue,
+          };
 
           rect.removeFrom(map);
           const cache = spawnedCaches.get(key);
@@ -400,8 +446,8 @@ function updateCacheProximity() {
           className: "token-marker",
           html: `<div class="token-value${
             nowFar ? " far-away" : ""
-          }">${cache.value}</div>`,
-          iconSize: [30, 30],
+          }"><div class="rank-name">${cache.name}</div><div class="rank-value">${cache.value}</div></div>`,
+          iconSize: [36, 36],
         }),
       );
     }
@@ -414,35 +460,54 @@ function updateCacheProximity() {
         const popupDiv = document.createElement("div");
 
         if (playerToken) {
-          const canCraft = playerToken.value === cache.value;
+          const canCraft = playerToken.rankIndex === cache.rankIndex;
           popupDiv.innerHTML = `
-      <div>Cell (${cache.i},${cache.j}) - Current value: ${cache.value}</div>
+      <div>Cell (${cache.i},${cache.j}) - ${cache.name} (${cache.value})</div>
       <button id="craft" ${
             canCraft ? "" : "disabled"
-          }>Craft with held token (value ${playerToken.value})</button>`;
+          }>Craft with held token (${playerToken.name} ${playerToken.value})</button>`;
 
           popupDiv.querySelector("#craft")?.addEventListener("click", () => {
             if (canCraft) {
-              const newValue = playerToken!.value + cache.value;
-              playerToken = { i: cache.i, j: cache.j, value: newValue };
+              const newRankIndex = Math.min(
+                playerToken!.rankIndex + 1,
+                RANKS.length - 1,
+              );
+              const newValue = RANKS[newRankIndex].value;
+              const newName = RANKS[newRankIndex].name;
+              playerToken = {
+                i: cache.i,
+                j: cache.j,
+                rankIndex: newRankIndex,
+                name: newName,
+                value: newValue,
+              };
               cache.rect.removeFrom(map);
               if (cache.marker) cache.marker.removeFrom(map);
               spawnedCaches.delete(key);
               updateStatusPanel();
 
-              if (newValue >= 2048) {
-                alert("You've created a 2048 token! You win!");
+              if (newValue >= VICTORY_VALUE) {
+                alert(
+                  `You've created a ${newName} token (${newValue})! You win!`,
+                );
               }
             }
             map.closePopup();
           });
         } else {
           popupDiv.innerHTML = `
-        <div>Cell (${cache.i},${cache.j}) - Token value: ${cache.value}</div>
+        <div>Cell (${cache.i},${cache.j}) - ${cache.name} (${cache.value})</div>
         <button id="pickup">Pick up token</button>`;
 
           popupDiv.querySelector("#pickup")?.addEventListener("click", () => {
-            playerToken = { i: cache.i, j: cache.j, value: cache.value };
+            playerToken = {
+              i: cache.i,
+              j: cache.j,
+              rankIndex: cache.rankIndex,
+              name: cache.name,
+              value: cache.value,
+            };
             cache.rect.removeFrom(map);
             if (cache.marker) cache.marker.removeFrom(map);
             spawnedCaches.delete(key);
