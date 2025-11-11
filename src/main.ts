@@ -391,7 +391,7 @@ function spawnCache(i: number, j: number) {
       className: "token-marker",
       html: `<div class="token-value${
         isFarAway ? " far-away" : ""
-      }"><div class="rank-name">${initialName}</div><div class="rank-value">${initialValue}</div></div>`,
+      }"><div class="rank-name">${initialName}</div></div>`,
       iconSize: [36, 36],
     }),
   });
@@ -574,7 +574,7 @@ function updateCacheProximity() {
           className: "token-marker",
           html: `<div class="token-value${
             nowFar ? " far-away" : ""
-          }"><div class="rank-name">${cache.name}</div><div class="rank-value">${cache.value}</div></div>`,
+          }"><div class="rank-name">${cache.name}</div></div>`,
           iconSize: [36, 36],
         }),
       );
