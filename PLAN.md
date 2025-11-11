@@ -54,5 +54,5 @@ Key technical challenge: Can you assemble a map-based user interface using the L
 #### Crafting Requirements
 
 - [x] Player can now craft a token a value higher than before
-- [ ] The game now requires that threshold to be reached for victory to be declared
+- [x] The game now requires that threshold to be reached for victory to be declared
 - [x] Add something to UI to show user the orders of rankings
