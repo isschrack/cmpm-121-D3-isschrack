@@ -63,6 +63,9 @@ function movePlayer(di: number, dj: number) {
 
   // Status panel might reflect nearby tokens; update it if needed
   updateStatusPanel();
+  // When the player moves, regenerate caches anchored to the player and refresh proximity
+  generateMap();
+  updateCacheProximity();
 }
 
 // Wire buttons to move exactly one cell in the expected directions:
@@ -109,6 +112,8 @@ const CLASSROOM_LATLNG = leaflet.latLng(
 const GAMEPLAY_ZOOM_LEVEL = 19;
 const TILE_DEGREES = 1e-4;
 const CACHE_SPAWN_PROBABILITY = 0.1;
+// How many tiles from the player to consider for generation (anchors to player)
+const VISIBLE_RADIUS_TILES = 10;
 
 // Create the map
 const map = leaflet.map(mapDiv, {
@@ -204,8 +209,9 @@ function spawnCache(i: number, j: number) {
 
   const bounds = cellToBounds(i, j);
 
-  // Check if token is more than 3 tiles away from player
-  const playerCell = latLngToCell(map.getCenter().lat, map.getCenter().lng);
+  // Check if token is more than 3 tiles away from player (anchor to player marker)
+  const pm = playerMarker.getLatLng();
+  const playerCell = latLngToCell(pm.lat, pm.lng);
   const tokenCell = { i, j };
   const distance = cellDistance(playerCell, tokenCell);
   const isFarAway = distance > 3;
@@ -311,27 +317,32 @@ function spawnCache(i: number, j: number) {
 }
 
 // Generate cells to edge of the map based on player position
-function generateMap() {
-  // Get the bounds of the visible map
-  const bounds = map.getBounds();
+function generateMap(mode: "player" | "viewport" = "player") {
+  let minI: number;
+  let maxI: number;
+  let minJ: number;
+  let maxJ: number;
 
-  // Calculate the cell indices for the corners of the visible map
-  const southwest = bounds.getSouthWest();
-  const northeast = bounds.getNorthEast();
+  if (mode === "viewport") {
+    // Generate caches for the current map viewport so panning reveals tokens.
+    const bounds = map.getBounds();
+    const southwest = bounds.getSouthWest();
+    const northeast = bounds.getNorthEast();
 
-  // Convert lat/lng to cell indices
-  const minI = Math.floor(
-    (southwest.lat - CLASSROOM_LATLNG.lat) / TILE_DEGREES,
-  );
-  const maxI = Math.floor(
-    (northeast.lat - CLASSROOM_LATLNG.lat) / TILE_DEGREES,
-  );
-  const minJ = Math.floor(
-    (southwest.lng - CLASSROOM_LATLNG.lng) / TILE_DEGREES,
-  );
-  const maxJ = Math.floor(
-    (northeast.lng - CLASSROOM_LATLNG.lng) / TILE_DEGREES,
-  );
+    minI = Math.floor((southwest.lat - CLASSROOM_LATLNG.lat) / TILE_DEGREES);
+    maxI = Math.floor((northeast.lat - CLASSROOM_LATLNG.lat) / TILE_DEGREES);
+    minJ = Math.floor((southwest.lng - CLASSROOM_LATLNG.lng) / TILE_DEGREES);
+    maxJ = Math.floor((northeast.lng - CLASSROOM_LATLNG.lng) / TILE_DEGREES);
+  } else {
+    // Anchor generation to the player's current cell so panning doesn't affect caches
+    const pm = playerMarker.getLatLng();
+    const playerCell = latLngToCell(pm.lat, pm.lng);
+
+    minI = playerCell.i - VISIBLE_RADIUS_TILES;
+    maxI = playerCell.i + VISIBLE_RADIUS_TILES;
+    minJ = playerCell.j - VISIBLE_RADIUS_TILES;
+    maxJ = playerCell.j + VISIBLE_RADIUS_TILES;
+  }
 
   // Create a set of currently visible cells
   const visibleCells = new Set<string>();
@@ -352,7 +363,7 @@ function generateMap() {
     }
   });
 
-  // Generate new caches to fill the visible map
+  // Generate new caches to fill the visible area
   for (let i = minI; i <= maxI; i++) {
     for (let j = minJ; j <= maxJ; j++) {
       // Spawn caches based on luck function for consistency
@@ -365,7 +376,8 @@ function generateMap() {
 
 // Update proximity (coloring/popup) for all spawned caches based on player position
 function updateCacheProximity() {
-  const playerCell = latLngToCell(map.getCenter().lat, map.getCenter().lng);
+  const pm = playerMarker.getLatLng();
+  const playerCell = latLngToCell(pm.lat, pm.lng);
 
   spawnedCaches.forEach((cache, key) => {
     const tokenCell = { i: cache.i, j: cache.j };
@@ -450,10 +462,11 @@ function updateCacheProximity() {
 }
 
 // Initial map generation
-generateMap();
+// Initial map generation: populate current viewport so panning immediately shows tokens
+generateMap("viewport");
+// Note: caches close to the player update only when the player moves; panning regenerates
+// viewport caches but does not change proximity (isFarAway) until the player moves.
 
-// Regenerate map and update cache proximity when player moves
-map.on("moveend", () => {
-  generateMap();
-  updateCacheProximity();
-});
+// Regenerate viewport caches when the user pans/zooms the map so unreachable tokens
+// become visible; do NOT update cache proximity here (that only happens on player move).
+map.on("moveend", () => generateMap("viewport"));
