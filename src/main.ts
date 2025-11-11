@@ -16,6 +16,23 @@ const controlPanelDiv = document.createElement("div");
 controlPanelDiv.id = "controlPanel";
 document.body.append(controlPanelDiv);
 
+// Add a button to show rankings
+const rankingsButton = document.createElement("button");
+rankingsButton.id = "rankingsButton";
+rankingsButton.textContent = "Show Rankings";
+rankingsButton.type = "button";
+rankingsButton.style.cssText = `
+  margin-left: 10px;
+  padding: 8px 16px;
+  background: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+`;
+rankingsButton.addEventListener("click", showRankings);
+controlPanelDiv.append(rankingsButton);
+
 // Movement controls (N/S/E/W) to move the local player one grid step
 const movementControls = document.createElement("div");
 movementControls.id = "movementControls";
@@ -30,6 +47,117 @@ const btn = (id: string, label: string) => {
   b.type = "button";
   return b;
 };
+
+// Function to show rankings in a modal
+function showRankings() {
+  // Create modal overlay
+  const modalOverlay = document.createElement("div");
+  modalOverlay.className = "modal-overlay";
+  modalOverlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+  `;
+
+  // Create modal content
+  const modalContent = document.createElement("div");
+  modalContent.className = "modal-content";
+  modalContent.style.cssText = `
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    max-width: 500px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+  `;
+
+  // Create close button
+  const closeButton = document.createElement("button");
+  closeButton.textContent = "×";
+  closeButton.style.cssText = `
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #333;
+  `;
+  closeButton.addEventListener("click", () => {
+    document.body.removeChild(modalOverlay);
+  });
+
+  // Create title
+  const title = document.createElement("h2");
+  title.textContent = "Rankings";
+  title.style.cssText = `
+    margin-top: 0;
+    text-align: center;
+  `;
+
+  // Create rankings table
+  const rankingsTable = document.createElement("table");
+  rankingsTable.style.cssText = `
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+  `;
+
+  // Create table header
+  const thead = document.createElement("thead");
+  const headerRow = document.createElement("tr");
+  const rankHeader = document.createElement("th");
+  rankHeader.textContent = "Rank";
+  rankHeader.style.cssText =
+    "text-align: left; padding: 8px; border-bottom: 1px solid #ddd;";
+  const valueHeader = document.createElement("th");
+  valueHeader.textContent = "Value";
+  valueHeader.style.cssText =
+    "text-align: right; padding: 8px; border-bottom: 1px solid #ddd;";
+  headerRow.append(rankHeader, valueHeader);
+  thead.append(headerRow);
+  rankingsTable.append(thead);
+
+  // Create table body with rankings data
+  const tbody = document.createElement("tbody");
+  RANKS.forEach((rank, index) => {
+    const row = document.createElement("tr");
+
+    const rankCell = document.createElement("td");
+    rankCell.textContent = `${index + 1}. ${rank.name}`;
+    rankCell.style.cssText = "padding: 8px; border-bottom: 1px solid #eee;";
+
+    const valueCell = document.createElement("td");
+    valueCell.textContent = rank.value.toString();
+    valueCell.style.cssText =
+      "text-align: right; padding: 8px; border-bottom: 1px solid #eee;";
+
+    row.append(rankCell, valueCell);
+    tbody.append(row);
+  });
+  rankingsTable.append(tbody);
+
+  // Assemble modal
+  modalContent.append(closeButton, title, rankingsTable);
+  modalOverlay.append(modalContent);
+  document.body.append(modalOverlay);
+
+  // Close modal when clicking outside
+  modalOverlay.addEventListener("click", (e) => {
+    if (e.target === modalOverlay) {
+      document.body.removeChild(modalOverlay);
+    }
+  });
+}
 
 const up = btn("move-n", "N");
 const left = btn("move-w", "W");
