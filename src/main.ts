@@ -317,6 +317,7 @@ function spawnCache(i: number, j: number) {
 }
 
 // Generate cells to edge of the map based on player position
+// deno-lint-ignore no-unused-vars
 function generateMap(mode: "player" | "viewport" = "player") {
   // Use the actual map viewport to determine which cells are visible.
   // This makes cells "memoryless": when a cell leaves the viewport it is

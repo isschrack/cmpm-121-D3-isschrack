@@ -43,7 +43,7 @@ Key technical challenge: Can you assemble a map-based user interface using the L
 #### Map Requirements
 
 - [x] Player movement buttons
-- [ ] Cells should appear to be memoryless in the sense that they forget their state when they are no longer visible on the screen.
+- [x] Cells should appear to be memoryless in the sense that they forget their state when they are no longer visible on the screen.
   - The player should be able to farm tokens by moving into and out of the visibility range of a cell.
 
 #### Crafting Requirements
