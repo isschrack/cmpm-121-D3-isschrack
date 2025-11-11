@@ -16,6 +16,65 @@ const controlPanelDiv = document.createElement("div");
 controlPanelDiv.id = "controlPanel";
 document.body.append(controlPanelDiv);
 
+// Movement controls (N/S/E/W) to move the local player one grid step
+const movementControls = document.createElement("div");
+movementControls.id = "movementControls";
+movementControls.style.cssText =
+  `display: flex; gap: 8px; align-items: center; justify-content: center;`;
+
+const btn = (id: string, label: string) => {
+  const b = document.createElement("button");
+  b.id = id;
+  b.className = "move-btn";
+  b.textContent = label;
+  b.type = "button";
+  return b;
+};
+
+const up = btn("move-n", "N");
+const left = btn("move-w", "W");
+const down = btn("move-s", "S");
+const right = btn("move-e", "E");
+
+// Arrange buttons in a simple layout
+const dpad = document.createElement("div");
+dpad.className = "dpad";
+dpad.append(up);
+const row = document.createElement("div");
+row.style.display = "flex";
+row.style.gap = "8px";
+row.append(left, down, right);
+dpad.append(row);
+
+movementControls.append(dpad);
+controlPanelDiv.append(movementControls);
+
+// Move the player by grid steps (di, dj) where di is change in i (lat), dj in j (lng)
+function movePlayer(di: number, dj: number) {
+  const center = map.getCenter();
+  const newLat = center.lat + di * TILE_DEGREES;
+  const newLng = center.lng + dj * TILE_DEGREES;
+  const newCenter = leaflet.latLng(newLat, newLng);
+
+  // Recenter map and update player marker
+  // Use the known gameplay zoom to keep view consistent
+  map.setView(newCenter, GAMEPLAY_ZOOM_LEVEL);
+  playerMarker.setLatLng(newCenter);
+
+  // Status panel might reflect nearby tokens; update it if needed
+  updateStatusPanel();
+}
+
+// Wire buttons to move exactly one cell in the expected directions:
+// - North: increase i (lat) by +1
+// - South: decrease i by -1
+// - East: increase j (lng) by +1
+// - West: decrease j by -1
+up.addEventListener("click", () => movePlayer(1, 0));
+down.addEventListener("click", () => movePlayer(-1, 0));
+left.addEventListener("click", () => movePlayer(0, -1));
+right.addEventListener("click", () => movePlayer(0, 1));
+
 const mapDiv = document.createElement("div");
 mapDiv.id = "map";
 document.body.append(mapDiv);
