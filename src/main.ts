@@ -280,6 +280,34 @@ const RANKS = [
 // the rank table automatically adjusts the victory threshold.
 const VICTORY_VALUE = RANKS[RANKS.length - 1].value;
 
+// Precomputed weights for each rank (inverse of value for lower values to be more common)
+const RANK_WEIGHTS: number[] = [];
+let totalWeight = 0;
+for (let i = 0; i < RANKS.length; i++) {
+  // Using inverse of value as weight to make lower values more common
+  const weight = 1 / RANKS[i].value;
+  RANK_WEIGHTS.push(weight);
+  totalWeight += weight;
+}
+
+// Function to get a weighted random rank index
+function getWeightedRankIndex(seed: string): number {
+  // Get a random value between 0 and totalWeight
+  const randomValue = luck(seed) * totalWeight;
+
+  // Find the rank index based on weights
+  let cumulativeWeight = 0;
+  for (let i = 0; i < RANKS.length; i++) {
+    cumulativeWeight += RANK_WEIGHTS[i];
+    if (randomValue <= cumulativeWeight) {
+      return i;
+    }
+  }
+
+  // Fallback to the last rank (shouldn't happen)
+  return RANKS.length - 1;
+}
+
 // Create the map
 const map = leaflet.map(mapDiv, {
   center: CLASSROOM_LATLNG,
@@ -395,10 +423,9 @@ function spawnCache(i: number, j: number) {
   });
   rect.addTo(map);
 
-  const randomIndex = Math.floor(
-    luck([i, j, "initialRank"].toString()) * RANKS.length,
+  const initialRankIndex = getWeightedRankIndex(
+    [i, j, "initialRank"].toString(),
   );
-  const initialRankIndex = randomIndex;
   const initialValue = RANKS[initialRankIndex].value;
   const initialName = RANKS[initialRankIndex].name;
 
@@ -414,6 +441,18 @@ function spawnCache(i: number, j: number) {
     }),
   });
   marker.addTo(map);
+
+  // Add click event listener to show token details
+  marker.addEventListener("click", () => {
+    showTokenDetails(
+      i,
+      j,
+      initialRankIndex,
+      initialValue,
+      initialName,
+      isFarAway,
+    );
+  });
 
   // Store the cache (include coordinates and proximity flag)
   spawnedCaches.set(key, {
@@ -508,6 +547,111 @@ function spawnCache(i: number, j: number) {
   if (!isFarAway) bindPopupForCache();
 }
 
+// Function to show token details/actions when clicking on a marker
+function showTokenDetails(
+  i: number,
+  j: number,
+  rankIndex: number,
+  value: number,
+  name: string,
+  isFarAway: boolean,
+) {
+  // Create popup content
+  const popupDiv = document.createElement("div");
+
+  if (playerToken) {
+    // Can only craft when the held token is the same rank as the cache
+    const canCraft = playerToken.rankIndex === rankIndex;
+    popupDiv.innerHTML = `
+      <div>Cell (${i},${j}) - ${name} (${value})</div>
+      <button id="craft" ${
+      canCraft ? "" : "disabled"
+    }>Craft with held token (${playerToken.name} ${playerToken.value})</button>`;
+
+    popupDiv.querySelector("#craft")?.addEventListener("click", () => {
+      if (canCraft) {
+        // Combine ranks to the next rank
+        const newRankIndex = Math.min(
+          playerToken!.rankIndex + 1,
+          RANKS.length - 1,
+        );
+        const newValue = RANKS[newRankIndex].value;
+        const newName = RANKS[newRankIndex].name;
+        playerToken = {
+          i,
+          j,
+          rankIndex: newRankIndex,
+          name: newName,
+          value: newValue,
+        };
+
+        // Remove cache from map and spawnedCaches
+        const key = cellKey(i, j);
+        const cache = spawnedCaches.get(key);
+        if (cache) {
+          cache.rect.removeFrom(map);
+          if (cache.marker) {
+            cache.marker.removeFrom(map);
+          }
+          spawnedCaches.delete(key);
+        }
+
+        updateStatusPanel();
+
+        if (newValue >= VICTORY_VALUE) {
+          alert(
+            `You've created a ${newName} token (${newValue})! You win!`,
+          );
+        }
+      }
+      map.closePopup();
+    });
+  } else {
+    if (isFarAway) {
+      popupDiv.innerHTML = `
+        <div>Cell (${i},${j}) - ${name} (${value})</div>
+        <div style="color: red;">Too far away to interact!</div>`;
+    } else {
+      popupDiv.innerHTML = `
+        <div>Cell (${i},${j}) - ${name} (${value})</div>
+        <button id="pickup">Pick up token</button>`;
+
+      popupDiv.querySelector("#pickup")?.addEventListener("click", () => {
+        playerToken = {
+          i,
+          j,
+          rankIndex: rankIndex,
+          name: name,
+          value: value,
+        };
+
+        // Remove cache from map and spawnedCaches
+        const key = cellKey(i, j);
+        const cache = spawnedCaches.get(key);
+        if (cache) {
+          cache.rect.removeFrom(map);
+          if (cache.marker) {
+            cache.marker.removeFrom(map);
+          }
+          spawnedCaches.delete(key);
+        }
+
+        updateStatusPanel();
+        map.closePopup();
+      });
+    }
+  }
+
+  // Create a popup at the marker position
+  const bounds = cellToBounds(i, j);
+  const center = bounds.getCenter();
+  // deno-lint-ignore no-unused-vars
+  const popup = leaflet.popup()
+    .setLatLng(center)
+    .setContent(popupDiv)
+    .openOn(map);
+}
+
 // Generate cells to edge of the map based on player position
 // deno-lint-ignore no-unused-vars
 function generateMap(mode: "player" | "viewport" = "player") {
@@ -596,6 +740,19 @@ function updateCacheProximity() {
           iconSize: [36, 36],
         }),
       );
+
+      // Update click event listener
+      cache.marker.removeEventListener("click");
+      cache.marker.addEventListener("click", () => {
+        showTokenDetails(
+          cache.i,
+          cache.j,
+          cache.rankIndex,
+          cache.value,
+          cache.name,
+          nowFar,
+        );
+      });
     }
 
     // Toggle popup binding: remove if far, add if now near
