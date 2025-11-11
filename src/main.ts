@@ -154,9 +154,12 @@ updateStatusPanel();
 const spawnedCaches = new Map<
   string,
   {
+    i: number;
+    j: number;
     marker: leaflet.Marker | undefined;
     rect: leaflet.Rectangle;
     value: number;
+    isFarAway: boolean;
   }
 >();
 
@@ -237,20 +240,23 @@ function spawnCache(i: number, j: number) {
   });
   marker.addTo(map);
 
-  // Store the cache
+  // Store the cache (include coordinates and proximity flag)
   spawnedCaches.set(key, {
+    i,
+    j,
     rect,
     value: initialValue,
     marker,
+    isFarAway,
   });
 
-  // Handle interactions with the cache (only if not far away)
-  if (!isFarAway) {
+  // Helper to (re)bind popup for a rect based on current playerToken
+  function bindPopupForCache() {
+    rect.unbindPopup();
     rect.bindPopup(() => {
       const popupDiv = document.createElement("div");
 
       if (playerToken) {
-        // If player is holding a token, show crafting option
         const canCraft = playerToken.value === initialValue;
         popupDiv.innerHTML = `
       <div>Cell (${i},${j}) - Current value: ${initialValue}</div>
@@ -259,7 +265,6 @@ function spawnCache(i: number, j: number) {
         }>Craft with held token (value ${playerToken.value})</button>`;
 
         popupDiv.querySelector("#craft")?.addEventListener("click", () => {
-          // Crafting logic - combine tokens (only if values are equal)
           if (canCraft) {
             const newValue = playerToken!.value + initialValue;
             playerToken = { i, j, value: newValue };
@@ -271,7 +276,6 @@ function spawnCache(i: number, j: number) {
             spawnedCaches.delete(key);
             updateStatusPanel();
 
-            // Check for win condition - reaching 2048 like in the 2048 game
             if (newValue >= 2048) {
               alert("You've created a 2048 token! You win!");
             }
@@ -279,17 +283,13 @@ function spawnCache(i: number, j: number) {
           map.closePopup();
         });
       } else {
-        // If player is not holding a token, show pickup option
         popupDiv.innerHTML = `
         <div>Cell (${i},${j}) - Token value: ${initialValue}</div>
         <button id="pickup">Pick up token</button>`;
 
         popupDiv.querySelector("#pickup")?.addEventListener("click", () => {
-          // Pickup logic - remove from map and add to inventory
           playerToken = { i, j, value: initialValue };
 
-          // Mirror the crafting removal: remove rect, remove stored marker if present,
-          // then delete the cache entry.
           rect.removeFrom(map);
           const cache = spawnedCaches.get(key);
           if (cache && cache.marker) {
@@ -305,6 +305,9 @@ function spawnCache(i: number, j: number) {
       return popupDiv;
     });
   }
+
+  // Only bind popup if cache is not far away
+  if (!isFarAway) bindPopupForCache();
 }
 
 // Generate cells to edge of the map based on player position
@@ -360,8 +363,97 @@ function generateMap() {
   }
 }
 
+// Update proximity (coloring/popup) for all spawned caches based on player position
+function updateCacheProximity() {
+  const playerCell = latLngToCell(map.getCenter().lat, map.getCenter().lng);
+
+  spawnedCaches.forEach((cache, key) => {
+    const tokenCell = { i: cache.i, j: cache.j };
+    const distance = cellDistance(playerCell, tokenCell);
+    const nowFar = distance > 3;
+
+    if (nowFar === cache.isFarAway) return; // no change
+
+    // Update stored flag
+    cache.isFarAway = nowFar;
+
+    // Update rectangle style
+    cache.rect.setStyle({
+      color: nowFar ? "#ff0000" : "#3388ff",
+      fillColor: nowFar ? "#ff0000" : "#3388ff",
+      fillOpacity: 0.2,
+      weight: nowFar ? 2 : 5,
+    });
+
+    // Update marker icon to reflect far-away styling
+    if (cache.marker) {
+      cache.marker.setIcon(
+        leaflet.divIcon({
+          className: "token-marker",
+          html: `<div class="token-value${
+            nowFar ? " far-away" : ""
+          }">${cache.value}</div>`,
+          iconSize: [30, 30],
+        }),
+      );
+    }
+
+    // Toggle popup binding: remove if far, add if now near
+    cache.rect.unbindPopup();
+    if (!nowFar) {
+      // Rebind popup using the same code used at spawn time
+      cache.rect.bindPopup(() => {
+        const popupDiv = document.createElement("div");
+
+        if (playerToken) {
+          const canCraft = playerToken.value === cache.value;
+          popupDiv.innerHTML = `
+      <div>Cell (${cache.i},${cache.j}) - Current value: ${cache.value}</div>
+      <button id="craft" ${
+            canCraft ? "" : "disabled"
+          }>Craft with held token (value ${playerToken.value})</button>`;
+
+          popupDiv.querySelector("#craft")?.addEventListener("click", () => {
+            if (canCraft) {
+              const newValue = playerToken!.value + cache.value;
+              playerToken = { i: cache.i, j: cache.j, value: newValue };
+              cache.rect.removeFrom(map);
+              if (cache.marker) cache.marker.removeFrom(map);
+              spawnedCaches.delete(key);
+              updateStatusPanel();
+
+              if (newValue >= 2048) {
+                alert("You've created a 2048 token! You win!");
+              }
+            }
+            map.closePopup();
+          });
+        } else {
+          popupDiv.innerHTML = `
+        <div>Cell (${cache.i},${cache.j}) - Token value: ${cache.value}</div>
+        <button id="pickup">Pick up token</button>`;
+
+          popupDiv.querySelector("#pickup")?.addEventListener("click", () => {
+            playerToken = { i: cache.i, j: cache.j, value: cache.value };
+            cache.rect.removeFrom(map);
+            if (cache.marker) cache.marker.removeFrom(map);
+            spawnedCaches.delete(key);
+            updateStatusPanel();
+            map.closePopup();
+          });
+        }
+
+        return popupDiv;
+      });
+    }
+  });
+}
+
 // Initial map generation
 generateMap();
 
-// Regenerate map when player moves
-map.on("moveend", generateMap);
+// Regenerate map and update cache proximity when player moves
+map.on("moveend", () => {
+  generateMap();
+  updateCacheProximity();
+});
