@@ -2,7 +2,7 @@
 
 ## Game Design Vision
 
-{a few-sentence description of the game mechanics}
+BitWorld is a grid-based exploration and crafting game where players navigate a procedurally generated map to collect and combine tokens. Players can only hold one token at a time and must strategically move around the map to find tokens of matching values to craft higher-value tokens. The ultimate goal is to create a token of sufficient value to win the game, with lower-value tokens being more common and higher-value tokens requiring more crafting steps to obtain.
 
 ## Technologies
 
@@ -61,5 +61,5 @@ Key technical challenge: Can you assemble a map-based user interface using the L
 
 - [] Cells should appear to have a memory of their state that persists even when they are not visible on the map
   - persistence across page loads is not yet required
-  - Cells should apply the Flyweight pattern or some similarly-effective memory-saving strategy so cells not visible on the map do not require memory for storage if they have not been modified by the player.
-  - Use the Memento pattern or some similarly-effective serialization strategy to preserve the state of modified cells when they scroll off-screen, and restore them when they return to view.
+  - [x] Cells should apply the Flyweight pattern or some similarly-effective memory-saving strategy so cells not visible on the map do not require memory for storage if they have not been modified by the player.
+  - [ ] Use the Memento pattern or some similarly-effective serialization strategy to preserve the state of modified cells when they scroll off-screen, and restore them when they return to view.

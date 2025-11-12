@@ -11,6 +11,8 @@ import "./_leafletWorkaround.ts"; // fixes for missing Leaflet images
 // Import our luck function
 import luck from "./_luck.ts";
 
+// Import Flyweight pattern
+import { CellContext, CellFlyweightFactory } from "./cellFlyweight.ts";
 // Create basic UI elements
 const controlPanelDiv = document.createElement("div");
 controlPanelDiv.id = "controlPanel";
@@ -290,24 +292,6 @@ for (let i = 0; i < RANKS.length; i++) {
   totalWeight += weight;
 }
 
-// Function to get a weighted random rank index
-function getWeightedRankIndex(seed: string): number {
-  // Get a random value between 0 and totalWeight
-  const randomValue = luck(seed) * totalWeight;
-
-  // Find the rank index based on weights
-  let cumulativeWeight = 0;
-  for (let i = 0; i < RANKS.length; i++) {
-    cumulativeWeight += RANK_WEIGHTS[i];
-    if (randomValue <= cumulativeWeight) {
-      return i;
-    }
-  }
-
-  // Fallback to the last rank (shouldn't happen)
-  return RANKS.length - 1;
-}
-
 // Create the map
 const map = leaflet.map(mapDiv, {
   center: CLASSROOM_LATLNG,
@@ -354,33 +338,12 @@ function updateStatusPanel() {
 // Initialize status panel
 updateStatusPanel();
 
-// Store for spawned caches
-const spawnedCaches = new Map<
-  string,
-  {
-    i: number;
-    j: number;
-    marker: leaflet.Marker | undefined;
-    rect: leaflet.Rectangle;
-    value: number;
-    isFarAway: boolean;
-    rankIndex: number;
-    name: string;
-  }
->();
+// Store for spawned caches (using Flyweight pattern)
+const spawnedCaches = new Map<string, CellContext>();
 
 // Convert cell coordinates to a string key
 function cellKey(i: number, j: number): string {
   return `${i},${j}`;
-}
-
-// Convert cell numbers into lat/lng bounds
-function cellToBounds(i: number, j: number) {
-  const origin = CLASSROOM_LATLNG;
-  return leaflet.latLngBounds([
-    [origin.lat + i * TILE_DEGREES, origin.lng + j * TILE_DEGREES],
-    [origin.lat + (i + 1) * TILE_DEGREES, origin.lng + (j + 1) * TILE_DEGREES],
-  ]);
 }
 
 // Convert lat/lng to cell coordinates
@@ -408,7 +371,8 @@ function spawnCache(i: number, j: number) {
     return;
   }
 
-  const bounds = cellToBounds(i, j);
+  // Get flyweight for shared properties
+  const flyweight = CellFlyweightFactory.getFlyweight(i, j);
 
   // Check if token is more than 3 tiles away from player (anchor to player marker)
   const pm = playerMarker.getLatLng();
@@ -418,7 +382,7 @@ function spawnCache(i: number, j: number) {
   const isFarAway = distance > 3;
 
   // Add a rectangle to the map to represent the cache
-  const rect = leaflet.rectangle(bounds, {
+  const rect = leaflet.rectangle(flyweight.bounds, {
     color: isFarAway ? "#ff0000" : "#3388ff", // Red if far away, default blue otherwise
     fillColor: isFarAway ? "#ff0000" : "#3388ff",
     fillOpacity: 0.2,
@@ -426,21 +390,13 @@ function spawnCache(i: number, j: number) {
   });
   rect.addTo(map);
 
-  // For first-time spawning, only allow common tokens
-  const initialRankIndex = getWeightedRankIndex(
-    [i, j, "initialRank"].toString(),
-  );
-  const initialValue = RANKS[initialRankIndex].value;
-  const initialName = RANKS[initialRankIndex].name;
-
   // Add a marker with the token value displayed as text
-  const center = bounds.getCenter();
-  const marker = leaflet.marker(center, {
+  const marker = leaflet.marker(flyweight.center, {
     icon: leaflet.divIcon({
       className: "token-marker",
       html: `<div class="token-value${
         isFarAway ? " far-away" : ""
-      }"><div class="rank-name">${initialName}</div></div>`,
+      }"><div class="rank-name">${flyweight.initialName}</div></div>`,
       iconSize: [36, 36],
     }),
   });
@@ -451,9 +407,9 @@ function spawnCache(i: number, j: number) {
     showTokenDetails(
       i,
       j,
-      initialRankIndex,
-      initialValue,
-      initialName,
+      flyweight.initialRankIndex,
+      flyweight.initialValue,
+      flyweight.initialName,
       isFarAway,
     );
   });
@@ -463,11 +419,12 @@ function spawnCache(i: number, j: number) {
     i,
     j,
     rect,
-    value: initialValue,
+    value: flyweight.initialValue,
     marker,
     isFarAway,
-    rankIndex: initialRankIndex,
-    name: initialName,
+    rankIndex: flyweight.initialRankIndex,
+    name: flyweight.initialName,
+    isModified: false,
   });
 
   // Helper to (re)bind popup for a rect based on current playerToken
@@ -478,9 +435,9 @@ function spawnCache(i: number, j: number) {
 
       if (playerToken) {
         // Can only craft when the held token is the same rank as the cache
-        const canCraft = playerToken.rankIndex === initialRankIndex;
+        const canCraft = playerToken.rankIndex === flyweight.initialRankIndex;
         popupDiv.innerHTML = `
-      <div>Cell (${i},${j}) - ${initialName} (${initialValue})</div>
+      <div>Cell (${i},${j}) - ${flyweight.initialName} (${flyweight.initialValue})</div>
       <button id="craft" ${
           canCraft ? "" : "disabled"
         }>Craft with held token (${playerToken.name} ${playerToken.value})</button>`;
@@ -524,10 +481,10 @@ function spawnCache(i: number, j: number) {
         // pickups resume.
         const initialRestrictionActive = !hasPickedUpFirstToken;
         const canPickupInitial = !initialRestrictionActive ||
-          initialRankIndex === 0;
+          flyweight.initialRankIndex === 0;
 
         popupDiv.innerHTML = `
-          <div>Cell (${i},${j}) - ${initialName} (${initialValue})</div>
+          <div>Cell (${i},${j}) - ${flyweight.initialName} (${flyweight.initialValue})</div>
           <button id="pickup" ${
           canPickupInitial ? "" : "disabled"
         }>Pick up token</button>
@@ -543,9 +500,9 @@ function spawnCache(i: number, j: number) {
           playerToken = {
             i,
             j,
-            rankIndex: initialRankIndex,
-            name: initialName,
-            value: initialValue,
+            rankIndex: flyweight.initialRankIndex,
+            name: flyweight.initialName,
+            value: flyweight.initialValue,
           };
 
           // Mark that the player has picked up their first token
@@ -613,7 +570,7 @@ function showTokenDetails(
         const key = cellKey(i, j);
         const cache = spawnedCaches.get(key);
         if (cache) {
-          cache.rect.removeFrom(map);
+          if (cache.rect) cache.rect.removeFrom(map);
           if (cache.marker) {
             cache.marker.removeFrom(map);
           }
@@ -670,7 +627,7 @@ function showTokenDetails(
         const key = cellKey(i, j);
         const cache = spawnedCaches.get(key);
         if (cache) {
-          cache.rect.removeFrom(map);
+          if (cache.rect) cache.rect.removeFrom(map);
           if (cache.marker) {
             cache.marker.removeFrom(map);
           }
@@ -684,11 +641,10 @@ function showTokenDetails(
   }
 
   // Create a popup at the marker position
-  const bounds = cellToBounds(i, j);
-  const center = bounds.getCenter();
+  const flyweight = CellFlyweightFactory.getFlyweight(i, j);
   // deno-lint-ignore no-unused-vars
   const popup = leaflet.popup()
-    .setLatLng(center)
+    .setLatLng(flyweight.center)
     .setContent(popupDiv)
     .openOn(map);
 }
@@ -728,7 +684,7 @@ function generateMap(mode: "player" | "viewport" = "player") {
   // Remove caches that are no longer visible (forget their state)
   spawnedCaches.forEach((cache, key) => {
     if (!visibleCells.has(key)) {
-      cache.rect.removeFrom(map);
+      if (cache.rect) cache.rect.removeFrom(map);
       if (cache.marker) {
         cache.marker.removeFrom(map);
       }
@@ -763,12 +719,14 @@ function updateCacheProximity() {
     cache.isFarAway = nowFar;
 
     // Update rectangle style
-    cache.rect.setStyle({
-      color: nowFar ? "#ff0000" : "#3388ff",
-      fillColor: nowFar ? "#ff0000" : "#3388ff",
-      fillOpacity: 0.2,
-      weight: nowFar ? 2 : 5,
-    });
+    if (cache.rect) {
+      cache.rect.setStyle({
+        color: nowFar ? "#ff0000" : "#3388ff",
+        fillColor: nowFar ? "#ff0000" : "#3388ff",
+        fillOpacity: 0.2,
+        weight: nowFar ? 2 : 5,
+      });
+    }
 
     // Update marker icon to reflect far-away styling
     if (cache.marker) {
@@ -797,90 +755,92 @@ function updateCacheProximity() {
     }
 
     // Toggle popup binding: remove if far, add if now near
-    cache.rect.unbindPopup();
+    if (cache.rect) cache.rect.unbindPopup();
     if (!nowFar) {
       // Rebind popup using the same code used at spawn time
-      cache.rect.bindPopup(() => {
-        const popupDiv = document.createElement("div");
+      if (cache.rect) {
+        cache.rect.bindPopup(() => {
+          const popupDiv = document.createElement("div");
 
-        if (playerToken) {
-          const canCraft = playerToken.rankIndex === cache.rankIndex;
-          popupDiv.innerHTML = `
+          if (playerToken) {
+            const canCraft = playerToken.rankIndex === cache.rankIndex;
+            popupDiv.innerHTML = `
       <div>Cell (${cache.i},${cache.j}) - ${cache.name} (${cache.value})</div>
       <button id="craft" ${
-            canCraft ? "" : "disabled"
-          }>Craft with held token (${playerToken.name} ${playerToken.value})</button>`;
+              canCraft ? "" : "disabled"
+            }>Craft with held token (${playerToken.name} ${playerToken.value})</button>`;
 
-          popupDiv.querySelector("#craft")?.addEventListener("click", () => {
-            if (canCraft) {
-              const newRankIndex = Math.min(
-                playerToken!.rankIndex + 1,
-                RANKS.length - 1,
-              );
-              const newValue = RANKS[newRankIndex].value;
-              const newName = RANKS[newRankIndex].name;
+            popupDiv.querySelector("#craft")?.addEventListener("click", () => {
+              if (canCraft) {
+                const newRankIndex = Math.min(
+                  playerToken!.rankIndex + 1,
+                  RANKS.length - 1,
+                );
+                const newValue = RANKS[newRankIndex].value;
+                const newName = RANKS[newRankIndex].name;
+                playerToken = {
+                  i: cache.i,
+                  j: cache.j,
+                  rankIndex: newRankIndex,
+                  name: newName,
+                  value: newValue,
+                };
+                if (cache.rect) cache.rect.removeFrom(map);
+                if (cache.marker) cache.marker.removeFrom(map);
+                spawnedCaches.delete(key);
+                updateStatusPanel();
+
+                if (newValue >= VICTORY_VALUE) {
+                  alert(
+                    `You've created a ${newName} token (${newValue})! You win!`,
+                  );
+                }
+              }
+              map.closePopup();
+            });
+          } else {
+            // Enforce initial pickup restriction: only allow Common tokens until
+            // the player has picked up their first token.
+            const initialRestrictionActive = !hasPickedUpFirstToken;
+            const canPickupInitial = !initialRestrictionActive ||
+              cache.rankIndex === 0;
+
+            popupDiv.innerHTML = `
+        <div>Cell (${cache.i},${cache.j}) - ${cache.name} (${cache.value})</div>
+        <button id="pickup" ${
+              canPickupInitial ? "" : "disabled"
+            }>Pick up token</button>
+        ${
+              initialRestrictionActive && !canPickupInitial
+                ? '<div style="color: #c0392b; font-size:12px; margin-top:6px;">At game start you may only pick up Common tokens.</div>'
+                : ""
+            }`;
+
+            popupDiv.querySelector("#pickup")?.addEventListener("click", () => {
+              if (!canPickupInitial) return;
+
               playerToken = {
                 i: cache.i,
                 j: cache.j,
-                rankIndex: newRankIndex,
-                name: newName,
-                value: newValue,
+                rankIndex: cache.rankIndex,
+                name: cache.name,
+                value: cache.value,
               };
-              cache.rect.removeFrom(map);
+
+              // Mark that the player has picked up their first token
+              if (!hasPickedUpFirstToken) hasPickedUpFirstToken = true;
+
+              if (cache.rect) cache.rect.removeFrom(map);
               if (cache.marker) cache.marker.removeFrom(map);
               spawnedCaches.delete(key);
               updateStatusPanel();
+              map.closePopup();
+            });
+          }
 
-              if (newValue >= VICTORY_VALUE) {
-                alert(
-                  `You've created a ${newName} token (${newValue})! You win!`,
-                );
-              }
-            }
-            map.closePopup();
-          });
-        } else {
-          // Enforce initial pickup restriction: only allow Common tokens until
-          // the player has picked up their first token.
-          const initialRestrictionActive = !hasPickedUpFirstToken;
-          const canPickupInitial = !initialRestrictionActive ||
-            cache.rankIndex === 0;
-
-          popupDiv.innerHTML = `
-        <div>Cell (${cache.i},${cache.j}) - ${cache.name} (${cache.value})</div>
-        <button id="pickup" ${
-            canPickupInitial ? "" : "disabled"
-          }>Pick up token</button>
-        ${
-            initialRestrictionActive && !canPickupInitial
-              ? '<div style="color: #c0392b; font-size:12px; margin-top:6px;">At game start you may only pick up Common tokens.</div>'
-              : ""
-          }`;
-
-          popupDiv.querySelector("#pickup")?.addEventListener("click", () => {
-            if (!canPickupInitial) return;
-
-            playerToken = {
-              i: cache.i,
-              j: cache.j,
-              rankIndex: cache.rankIndex,
-              name: cache.name,
-              value: cache.value,
-            };
-
-            // Mark that the player has picked up their first token
-            if (!hasPickedUpFirstToken) hasPickedUpFirstToken = true;
-
-            cache.rect.removeFrom(map);
-            if (cache.marker) cache.marker.removeFrom(map);
-            spawnedCaches.delete(key);
-            updateStatusPanel();
-            map.closePopup();
-          });
-        }
-
-        return popupDiv;
-      });
+          return popupDiv;
+        });
+      }
     }
   });
 }
