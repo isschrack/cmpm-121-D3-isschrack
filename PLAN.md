@@ -56,3 +56,10 @@ Key technical challenge: Can you assemble a map-based user interface using the L
 - [x] Player can now craft a token a value higher than before
 - [x] The game now requires that threshold to be reached for victory to be declared
 - [x] Add something to UI to show user the orders of rankings
+
+### D3.b: Globe-spanning Gameplay
+
+-[] Cells should appear to have a memory of their state that persists even when they are not visible on the map
+-persistence across page loads is not yet required
+-Cells should apply the Flyweight pattern or some similarly-effective memory-saving strategy so cells not visible on the map do not require memory for storage if they have not been modified by the player.
+-Use the Memento pattern or some similarly-effective serialization strategy to preserve the state of modified cells when they scroll off-screen, and restore them when they return to view.
