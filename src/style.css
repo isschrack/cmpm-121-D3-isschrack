@@ -41,6 +41,16 @@
   background-color: rgba(255, 0, 0, 0.7);
 }
 
+.token-value.matching-rank {
+  background-color: rgba(
+    0,
+    128,
+    0,
+    0.7
+  ); /* Green background for matching ranks */
+  box-shadow: 0 0 5px rgba(0, 255, 0, 0.8); /* Green glow effect */
+}
+
 /* Movement controls */
 .dpad {
   text-align: center;

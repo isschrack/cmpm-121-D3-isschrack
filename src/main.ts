@@ -338,6 +338,25 @@ function updateStatusPanel() {
 // Initialize status panel
 updateStatusPanel();
 
+// Update all markers to show matching rank styling
+function updateMatchingRankMarkers() {
+  spawnedCaches.forEach((cache, _key) => {
+    if (cache.marker) {
+      cache.marker.setIcon(
+        leaflet.divIcon({
+          className: "token-marker",
+          html: `<div class="token-value${cache.isFarAway ? " far-away" : ""}${
+            playerToken && playerToken.rankIndex === cache.rankIndex
+              ? " matching-rank"
+              : ""
+          }"><div class="rank-name">${cache.name}</div></div>`,
+          iconSize: [36, 36],
+        }),
+      );
+    }
+  });
+}
+
 // Store for spawned caches (using Flyweight pattern)
 const spawnedCaches = new Map<string, CellContext>();
 
@@ -394,8 +413,10 @@ function spawnCache(i: number, j: number) {
   const marker = leaflet.marker(flyweight.center, {
     icon: leaflet.divIcon({
       className: "token-marker",
-      html: `<div class="token-value${
-        isFarAway ? " far-away" : ""
+      html: `<div class="token-value${isFarAway ? " far-away" : ""}${
+        playerToken && playerToken.rankIndex === flyweight.initialRankIndex
+          ? " matching-rank"
+          : ""
       }"><div class="rank-name">${flyweight.initialName}</div></div>`,
       iconSize: [36, 36],
     }),
@@ -465,6 +486,7 @@ function spawnCache(i: number, j: number) {
             }
             spawnedCaches.delete(key);
             updateStatusPanel();
+            updateMatchingRankMarkers();
 
             if (newValue >= VICTORY_VALUE) {
               alert(
@@ -516,6 +538,7 @@ function spawnCache(i: number, j: number) {
           spawnedCaches.delete(key);
 
           updateStatusPanel();
+          updateMatchingRankMarkers();
           map.closePopup();
         });
       }
@@ -578,6 +601,7 @@ function showTokenDetails(
         }
 
         updateStatusPanel();
+        updateMatchingRankMarkers();
 
         if (newValue >= VICTORY_VALUE) {
           alert(
@@ -635,6 +659,7 @@ function showTokenDetails(
         }
 
         updateStatusPanel();
+        updateMatchingRankMarkers();
         map.closePopup();
       });
     }
@@ -733,8 +758,10 @@ function updateCacheProximity() {
       cache.marker.setIcon(
         leaflet.divIcon({
           className: "token-marker",
-          html: `<div class="token-value${
-            nowFar ? " far-away" : ""
+          html: `<div class="token-value${nowFar ? " far-away" : ""}${
+            playerToken && playerToken.rankIndex === cache.rankIndex
+              ? " matching-rank"
+              : ""
           }"><div class="rank-name">${cache.name}</div></div>`,
           iconSize: [36, 36],
         }),
@@ -789,6 +816,7 @@ function updateCacheProximity() {
                 if (cache.marker) cache.marker.removeFrom(map);
                 spawnedCaches.delete(key);
                 updateStatusPanel();
+                updateMatchingRankMarkers();
 
                 if (newValue >= VICTORY_VALUE) {
                   alert(
@@ -834,6 +862,7 @@ function updateCacheProximity() {
               if (cache.marker) cache.marker.removeFrom(map);
               spawnedCaches.delete(key);
               updateStatusPanel();
+              updateMatchingRankMarkers();
               map.closePopup();
             });
           }
