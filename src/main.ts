@@ -12,7 +12,12 @@ import "./_leafletWorkaround.ts"; // fixes for missing Leaflet images
 import luck from "./_luck.ts";
 
 // Import Flyweight pattern
-import { CellContext, CellFlyweightFactory } from "./cellFlyweight.ts";
+import {
+  CellContext,
+  CellFlyweightFactory,
+  CellMemento,
+  MementoManager,
+} from "./cellFlyweight.ts";
 // Create basic UI elements
 const controlPanelDiv = document.createElement("div");
 controlPanelDiv.id = "controlPanel";
@@ -390,15 +395,40 @@ function spawnCache(i: number, j: number) {
     return;
   }
 
+  // Check if we have a memento for this cell
+  let cacheState: CellMemento | null = null;
+  if (MementoManager.hasMemento(key)) {
+    cacheState = MementoManager.getMemento(key)!;
+  }
+
+  // If we have a memento and the cell was modified, we should spawn it
+  // Otherwise, use the flyweight's shouldSpawnCache property
+  const shouldSpawn = cacheState
+    ? cacheState.isModified
+    : CellFlyweightFactory.getFlyweight(i, j).shouldSpawnCache;
+
+  // Don't spawn if we shouldn't
+  if (!shouldSpawn) {
+    return;
+  }
+
   // Get flyweight for shared properties
   const flyweight = CellFlyweightFactory.getFlyweight(i, j);
+
+  // Use memento state if available, otherwise use flyweight defaults
+  const value = cacheState ? cacheState.value : flyweight.initialValue;
+  const rankIndex = cacheState
+    ? cacheState.rankIndex
+    : flyweight.initialRankIndex;
+  const name = cacheState ? cacheState.name : flyweight.initialName;
+  const isModified = cacheState ? cacheState.isModified : false;
 
   // Check if token is more than 3 tiles away from player (anchor to player marker)
   const pm = playerMarker.getLatLng();
   const playerCell = latLngToCell(pm.lat, pm.lng);
   const tokenCell = { i, j };
   const distance = cellDistance(playerCell, tokenCell);
-  const isFarAway = distance > 3;
+  const isFarAway = cacheState ? cacheState.isFarAway : (distance > 3);
 
   // Add a rectangle to the map to represent the cache
   const rect = leaflet.rectangle(flyweight.bounds, {
@@ -414,10 +444,10 @@ function spawnCache(i: number, j: number) {
     icon: leaflet.divIcon({
       className: "token-marker",
       html: `<div class="token-value${isFarAway ? " far-away" : ""}${
-        playerToken && playerToken.rankIndex === flyweight.initialRankIndex
+        playerToken && playerToken.rankIndex === rankIndex
           ? " matching-rank"
           : ""
-      }"><div class="rank-name">${flyweight.initialName}</div></div>`,
+      }"><div class="rank-name">${name}</div></div>`,
       iconSize: [36, 36],
     }),
   });
@@ -428,25 +458,26 @@ function spawnCache(i: number, j: number) {
     showTokenDetails(
       i,
       j,
-      flyweight.initialRankIndex,
-      flyweight.initialValue,
-      flyweight.initialName,
+      rankIndex,
+      value,
+      name,
       isFarAway,
     );
   });
 
   // Store the cache (include coordinates and proximity flag)
-  spawnedCaches.set(key, {
+  const cellContext: CellContext = {
     i,
     j,
     rect,
-    value: flyweight.initialValue,
+    value,
     marker,
     isFarAway,
-    rankIndex: flyweight.initialRankIndex,
-    name: flyweight.initialName,
-    isModified: false,
-  });
+    rankIndex,
+    name,
+    isModified,
+  };
+  spawnedCaches.set(key, cellContext);
 
   // Helper to (re)bind popup for a rect based on current playerToken
   function bindPopupForCache() {
@@ -456,9 +487,9 @@ function spawnCache(i: number, j: number) {
 
       if (playerToken) {
         // Can only craft when the held token is the same rank as the cache
-        const canCraft = playerToken.rankIndex === flyweight.initialRankIndex;
+        const canCraft = playerToken.rankIndex === rankIndex;
         popupDiv.innerHTML = `
-      <div>Cell (${i},${j}) - ${flyweight.initialName} (${flyweight.initialValue})</div>
+      <div>Cell (${i},${j}) - ${name} (${value})</div>
       <button id="craft" ${
           canCraft ? "" : "disabled"
         }>Craft with held token (${playerToken.name} ${playerToken.value})</button>`;
@@ -479,8 +510,22 @@ function spawnCache(i: number, j: number) {
               name: newName,
               value: newValue,
             };
-            rect.removeFrom(map);
+            // Save a memento marking this cell empty so the crafted token
+            // (now in the player's hand) does not respawn when the
+            // viewport/player moves.
             const cache = spawnedCaches.get(key);
+            const mementoToSave: CellMemento = {
+              i: i,
+              j: j,
+              value: cache ? cache.value : 0,
+              isFarAway: cache ? cache.isFarAway : false,
+              rankIndex: cache ? cache.rankIndex : -1,
+              name: cache ? cache.name : "",
+              isModified: false,
+            };
+            MementoManager.saveMemento(key, mementoToSave);
+
+            rect.removeFrom(map);
             if (cache && cache.marker) {
               cache.marker.removeFrom(map);
             }
@@ -503,10 +548,10 @@ function spawnCache(i: number, j: number) {
         // pickups resume.
         const initialRestrictionActive = !hasPickedUpFirstToken;
         const canPickupInitial = !initialRestrictionActive ||
-          flyweight.initialRankIndex === 0;
+          rankIndex === 0;
 
         popupDiv.innerHTML = `
-          <div>Cell (${i},${j}) - ${flyweight.initialName} (${flyweight.initialValue})</div>
+          <div>Cell (${i},${j}) - ${name} (${value})</div>
           <button id="pickup" ${
           canPickupInitial ? "" : "disabled"
         }>Pick up token</button>
@@ -522,16 +567,29 @@ function spawnCache(i: number, j: number) {
           playerToken = {
             i,
             j,
-            rankIndex: flyweight.initialRankIndex,
-            name: flyweight.initialName,
-            value: flyweight.initialValue,
+            rankIndex: rankIndex,
+            name: name,
+            value: value,
           };
 
           // Mark that the player has picked up their first token
           if (!hasPickedUpFirstToken) hasPickedUpFirstToken = true;
 
-          rect.removeFrom(map);
+          // Save a memento indicating this cell no longer has a cache so it
+          // will not be respawned when the player or viewport moves.
           const cache = spawnedCaches.get(key);
+          const mementoToSave: CellMemento = {
+            i: i,
+            j: j,
+            value: cache ? cache.value : 0,
+            isFarAway: cache ? cache.isFarAway : false,
+            rankIndex: cache ? cache.rankIndex : -1,
+            name: cache ? cache.name : "",
+            isModified: false,
+          };
+          MementoManager.saveMemento(key, mementoToSave);
+
+          rect.removeFrom(map);
           if (cache && cache.marker) {
             cache.marker.removeFrom(map);
           }
@@ -593,6 +651,18 @@ function showTokenDetails(
         const key = cellKey(i, j);
         const cache = spawnedCaches.get(key);
         if (cache) {
+          // Save a memento marking this cell empty so the crafted token
+          // (now in the player's hand) does not respawn later.
+          const mementoToSave: CellMemento = {
+            i: cache.i,
+            j: cache.j,
+            value: cache.value,
+            isFarAway: cache.isFarAway,
+            rankIndex: -1,
+            name: "",
+            isModified: false,
+          };
+          MementoManager.saveMemento(key, mementoToSave);
           if (cache.rect) cache.rect.removeFrom(map);
           if (cache.marker) {
             cache.marker.removeFrom(map);
@@ -647,9 +717,22 @@ function showTokenDetails(
         // Mark that the player has picked up their first token
         if (!hasPickedUpFirstToken) hasPickedUpFirstToken = true;
 
-        // Remove cache from map and spawnedCaches
+        // Remove cache from map and spawnedCaches. Also save a memento so
+        // this cell remains empty when it leaves and later re-enters the
+        // viewport.
         const key = cellKey(i, j);
         const cache = spawnedCaches.get(key);
+        const mementoToSave: CellMemento = {
+          i: i,
+          j: j,
+          value: cache ? cache.value : 0,
+          isFarAway: cache ? cache.isFarAway : false,
+          rankIndex: cache ? cache.rankIndex : -1,
+          name: cache ? cache.name : "",
+          isModified: false,
+        };
+        MementoManager.saveMemento(key, mementoToSave);
+
         if (cache) {
           if (cache.rect) cache.rect.removeFrom(map);
           if (cache.marker) {
@@ -706,9 +789,21 @@ function generateMap(mode: "player" | "viewport" = "player") {
     }
   }
 
-  // Remove caches that are no longer visible (forget their state)
+  // Remove caches that are no longer visible (save their state before removing)
   spawnedCaches.forEach((cache, key) => {
     if (!visibleCells.has(key)) {
+      // Save the state of the cache before removing it
+      const memento: CellMemento = {
+        i: cache.i,
+        j: cache.j,
+        value: cache.value,
+        isFarAway: cache.isFarAway,
+        rankIndex: cache.rankIndex,
+        name: cache.name,
+        isModified: cache.isModified,
+      };
+      MementoManager.saveMemento(key, memento);
+
       if (cache.rect) cache.rect.removeFrom(map);
       if (cache.marker) {
         cache.marker.removeFrom(map);
@@ -720,8 +815,16 @@ function generateMap(mode: "player" | "viewport" = "player") {
   // Generate new caches to fill the visible viewport area
   for (let i = minI; i <= maxI; i++) {
     for (let j = minJ; j <= maxJ; j++) {
-      // Spawn caches based on luck function for consistency
-      if (luck([i, j].toString()) < CACHE_SPAWN_PROBABILITY) {
+      // Spawn caches based on luck function for consistency.
+      // Also ensure that any cell which has a saved memento (i.e. was
+      // modified by the player) is always respawned when it returns to
+      // the viewport so its state is preserved across player moves/pans.
+      const key = cellKey(i, j);
+      const shouldSpawnFromMemento = MementoManager.hasMemento(key);
+      if (
+        shouldSpawnFromMemento ||
+        luck([i, j].toString()) < CACHE_SPAWN_PROBABILITY
+      ) {
         spawnCache(i, j);
       }
     }
@@ -742,6 +845,18 @@ function updateCacheProximity() {
 
     // Update stored flag
     cache.isFarAway = nowFar;
+
+    // Save the updated state
+    const memento: CellMemento = {
+      i: cache.i,
+      j: cache.j,
+      value: cache.value,
+      isFarAway: cache.isFarAway,
+      rankIndex: cache.rankIndex,
+      name: cache.name,
+      isModified: cache.isModified,
+    };
+    MementoManager.saveMemento(key, memento);
 
     // Update rectangle style
     if (cache.rect) {
@@ -812,6 +927,19 @@ function updateCacheProximity() {
                   name: newName,
                   value: newValue,
                 };
+                // Save a memento marking this cell empty so the crafted
+                // token (now in the player's hand) does not respawn later.
+                const mementoToSave: CellMemento = {
+                  i: cache.i,
+                  j: cache.j,
+                  value: cache.value,
+                  isFarAway: cache.isFarAway,
+                  rankIndex: -1,
+                  name: "",
+                  isModified: false,
+                };
+                MementoManager.saveMemento(key, mementoToSave);
+
                 if (cache.rect) cache.rect.removeFrom(map);
                 if (cache.marker) cache.marker.removeFrom(map);
                 spawnedCaches.delete(key);
@@ -857,6 +985,19 @@ function updateCacheProximity() {
 
               // Mark that the player has picked up their first token
               if (!hasPickedUpFirstToken) hasPickedUpFirstToken = true;
+
+              // Save a memento so this cell remains empty when it leaves
+              // and later re-enters the viewport.
+              const mementoToSave: CellMemento = {
+                i: cache.i,
+                j: cache.j,
+                value: cache.value,
+                isFarAway: cache.isFarAway,
+                rankIndex: cache.rankIndex,
+                name: cache.name,
+                isModified: false,
+              };
+              MementoManager.saveMemento(key, mementoToSave);
 
               if (cache.rect) cache.rect.removeFrom(map);
               if (cache.marker) cache.marker.removeFrom(map);

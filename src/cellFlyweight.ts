@@ -60,6 +60,17 @@ export interface CellFlyweight {
   initialName: string;
 }
 
+// Memento interface for cell state serialization
+export interface CellMemento {
+  i: number;
+  j: number;
+  value: number;
+  isFarAway: boolean;
+  rankIndex: number;
+  name: string;
+  isModified: boolean;
+}
+
 // Context for cell-specific state
 export interface CellContext {
   i: number;
@@ -123,5 +134,30 @@ export class CellFlyweightFactory {
 
   static clearCache(): void {
     this.flyweights.clear();
+  }
+}
+
+// MementoManager to handle preservation and restoration of cell states
+export class MementoManager {
+  private static mementos = new Map<string, CellMemento>();
+
+  static saveMemento(key: string, memento: CellMemento): void {
+    this.mementos.set(key, memento);
+  }
+
+  static getMemento(key: string): CellMemento | undefined {
+    return this.mementos.get(key);
+  }
+
+  static hasMemento(key: string): boolean {
+    return this.mementos.has(key);
+  }
+
+  static removeMemento(key: string): boolean {
+    return this.mementos.delete(key);
+  }
+
+  static clearMementos(): void {
+    this.mementos.clear();
   }
 }
