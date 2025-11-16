@@ -104,6 +104,48 @@ toggleMovementButton.style.cssText = `
 toggleMovementButton.addEventListener("click", toggleMovementMode);
 controlPanelDiv.append(toggleMovementButton);
 
+// Add a button to start a new game (clears persisted state)
+const newGameButton = document.createElement("button");
+newGameButton.id = "newGame";
+newGameButton.textContent = "New Game";
+newGameButton.type = "button";
+newGameButton.style.cssText = `
+  margin-left: 10px;
+  padding: 8px 16px;
+  background: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+`;
+newGameButton.addEventListener("click", () => {
+  if (!confirm("Start a new game? This will erase saved progress.")) return;
+  // Clear persisted state
+  try {
+    localStorage.removeItem("game_state");
+    localStorage.removeItem("game_mementos");
+  } catch (_e) {
+    // ignore
+  }
+
+  // Clear in-memory state
+  spawnedCaches.forEach((c) => {
+    if (c.rect) c.rect.removeFrom(map);
+    if (c.marker) c.marker.removeFrom(map);
+  });
+  spawnedCaches.clear();
+  MementoManager.clearMementos();
+  playerToken = null;
+  hasPickedUpFirstToken = false;
+  // Reset player position to classroom
+  map.setView(CLASSROOM_LATLNG, GAMEPLAY_ZOOM_LEVEL);
+  playerMarker.setLatLng(CLASSROOM_LATLNG);
+  updateStatusPanel();
+  generateMap();
+  updateCacheProximity();
+});
+controlPanelDiv.append(newGameButton);
+
 // Movement controls (N/S/E/W) to move the local player one grid step
 const movementControls = document.createElement("div");
 movementControls.id = "movementControls";
@@ -294,6 +336,7 @@ function movePlayer(di: number, dj: number) {
   // When the player moves, regenerate caches anchored to the player and refresh proximity
   generateMap();
   updateCacheProximity();
+  saveGameState();
 }
 
 // Wire buttons to move exactly one cell in the expected directions:
@@ -437,6 +480,70 @@ function updateStatusPanel() {
 
 // Initialize status panel
 updateStatusPanel();
+
+// Save/load helpers: persist player state and mementos to localStorage
+function saveGameState() {
+  try {
+    const state = {
+      playerToken: playerToken,
+      hasPickedUpFirstToken: hasPickedUpFirstToken,
+      // Persist player marker center so we can restore position
+      playerPosition: playerMarker.getLatLng()
+        ? {
+          lat: playerMarker.getLatLng().lat,
+          lng: playerMarker.getLatLng().lng,
+        }
+        : null,
+    };
+    localStorage.setItem("game_state", JSON.stringify(state));
+    // Mementos are persisted by MementoManager, but ensure export exists
+    if (
+      typeof MementoManager !== "undefined" &&
+      typeof MementoManager.exportMementos === "function"
+    ) {
+      // export handled internally by MementoManager.persistToLocalStorage
+    }
+  } catch (_e) {
+    // ignore storage errors
+  }
+}
+
+function loadGameState() {
+  try {
+    // Load mementos first so map generation uses them
+    if (
+      typeof MementoManager !== "undefined" &&
+      typeof MementoManager.loadFromLocalStorage === "function"
+    ) {
+      MementoManager.loadFromLocalStorage();
+    }
+
+    const raw = localStorage.getItem("game_state");
+    if (!raw) return;
+    const state = JSON.parse(raw);
+    if (state) {
+      playerToken = state.playerToken ?? null;
+      hasPickedUpFirstToken = !!state.hasPickedUpFirstToken;
+      if (
+        state.playerPosition && state.playerPosition.lat &&
+        state.playerPosition.lng
+      ) {
+        const pos = leaflet.latLng(
+          state.playerPosition.lat,
+          state.playerPosition.lng,
+        );
+        playerMarker.setLatLng(pos);
+        map.setView(pos, GAMEPLAY_ZOOM_LEVEL);
+      }
+      updateStatusPanel();
+    }
+  } catch (_e) {
+    // ignore
+  }
+}
+
+// Load persisted state if available
+loadGameState();
 
 // Update all markers to show matching rank styling
 function updateMatchingRankMarkers() {
@@ -627,6 +734,7 @@ function spawnCache(i: number, j: number) {
             spawnedCaches.delete(key);
             updateStatusPanel();
             updateMatchingRankMarkers();
+            saveGameState();
 
             if (newValue >= VICTORY_VALUE) {
               alert(
@@ -692,6 +800,7 @@ function spawnCache(i: number, j: number) {
 
           updateStatusPanel();
           updateMatchingRankMarkers();
+          saveGameState();
           map.closePopup();
         });
       }
@@ -767,6 +876,7 @@ function showTokenDetails(
 
         updateStatusPanel();
         updateMatchingRankMarkers();
+        saveGameState();
 
         if (newValue >= VICTORY_VALUE) {
           alert(
@@ -838,6 +948,7 @@ function showTokenDetails(
 
         updateStatusPanel();
         updateMatchingRankMarkers();
+        saveGameState();
         map.closePopup();
       });
     }
@@ -1040,6 +1151,7 @@ function updateCacheProximity() {
                 spawnedCaches.delete(key);
                 updateStatusPanel();
                 updateMatchingRankMarkers();
+                saveGameState();
 
                 if (newValue >= VICTORY_VALUE) {
                   alert(
@@ -1099,6 +1211,7 @@ function updateCacheProximity() {
               spawnedCaches.delete(key);
               updateStatusPanel();
               updateMatchingRankMarkers();
+              saveGameState();
               map.closePopup();
             });
           }
@@ -1141,6 +1254,7 @@ function simulatePosition(latitude: number, longitude: number) {
     playerMarker.setLatLng(center);
     generateMap();
     updateCacheProximity();
+    saveGameState();
     return;
   }
 

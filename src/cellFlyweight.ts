@@ -143,6 +143,7 @@ export class MementoManager {
 
   static saveMemento(key: string, memento: CellMemento): void {
     this.mementos.set(key, memento);
+    this.persistToLocalStorage();
   }
 
   static getMemento(key: string): CellMemento | undefined {
@@ -154,10 +155,57 @@ export class MementoManager {
   }
 
   static removeMemento(key: string): boolean {
-    return this.mementos.delete(key);
+    const removed = this.mementos.delete(key);
+    if (removed) this.persistToLocalStorage();
+    return removed;
   }
 
   static clearMementos(): void {
     this.mementos.clear();
+    this.persistToLocalStorage();
+  }
+
+  // Export mementos as a plain object for serialization
+  static exportMementos(): Record<string, CellMemento> {
+    return Object.fromEntries(this.mementos.entries());
+  }
+
+  // Import mementos from a plain object (e.g. deserialized JSON)
+  static importMementos(
+    obj: Record<string, CellMemento> | null | undefined,
+  ): void {
+    this.mementos.clear();
+    if (!obj) return;
+    for (const [k, v] of Object.entries(obj)) {
+      this.mementos.set(k, v as CellMemento);
+    }
+    this.persistToLocalStorage();
+  }
+
+  // Persist the mementos map to localStorage (browser). No-op if unavailable.
+  private static persistToLocalStorage(): void {
+    try {
+      if (typeof localStorage === "undefined") return;
+      const obj = Object.fromEntries(this.mementos.entries());
+      localStorage.setItem("game_mementos", JSON.stringify(obj));
+    } catch (_e) {
+      // Ignore storage errors (e.g. privacy mode)
+    }
+  }
+
+  // Load persisted mementos from localStorage into memory. No-op if unavailable.
+  static loadFromLocalStorage(): void {
+    try {
+      if (typeof localStorage === "undefined") return;
+      const raw = localStorage.getItem("game_mementos");
+      if (!raw) return;
+      const obj = JSON.parse(raw) as Record<string, CellMemento>;
+      this.mementos.clear();
+      for (const [k, v] of Object.entries(obj)) {
+        this.mementos.set(k, v as CellMemento);
+      }
+    } catch (_e) {
+      // ignore parse errors
+    }
   }
 }
