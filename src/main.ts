@@ -18,6 +18,7 @@ import {
   CellMemento,
   MementoManager,
 } from "./cellFlyweight.ts";
+import MovementController from "./movementFacade.ts";
 // Create basic UI elements
 const controlPanelDiv = document.createElement("div");
 controlPanelDiv.id = "controlPanel";
@@ -64,9 +65,10 @@ controlPanelDiv.append(mockContainer);
 // Movement mode tracking
 type MovementMode = "buttons" | "geolocation";
 let currentMovementMode: MovementMode = "buttons";
-let geolocationWatchId: number | null = null;
-let _lastPosition: { lat: number; lng: number } | null = null;
+const _geolocationWatchId: number | null = null;
+const _lastPosition: { lat: number; lng: number } | null = null;
 let lastSnappedCell: { i: number; j: number } | null = null;
+let movementController: MovementController | null = null;
 
 // Add a button to show rankings
 const rankingsButton = document.createElement("button");
@@ -119,108 +121,15 @@ const btn = (id: string, label: string) => {
 
 // Function to toggle between movement modes
 function toggleMovementMode() {
-  if (currentMovementMode === "buttons") {
-    // Switch to geolocation mode
-    currentMovementMode = "geolocation";
-    toggleMovementButton.textContent = "Use Buttons";
-    // Disable on-screen movement buttons while geolocation is active
-    setMovementControlsEnabled(false);
-
-    // Start geolocation tracking
-    if (navigator.geolocation) {
-      // Request high-accuracy position updates
-      geolocationWatchId = navigator.geolocation.watchPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-
-          // Update the on-screen geolocation debug/status info so the
-          // user can see what the browser is actually returning.
-          try {
-            const acc = position.coords.accuracy;
-            geoStatusDiv.textContent = `Geolocation: ${latitude.toFixed(6)}, ${
-              longitude.toFixed(6)
-            } (±${acc}m)`;
-          } catch (_e) {
-            geoStatusDiv.textContent = `Geolocation: ${latitude.toFixed(6)}, ${
-              longitude.toFixed(6)
-            }`;
-          }
-
-          // Show exact GPS position immediately so the user sees themselves
-          const exactLatLng = leaflet.latLng(latitude, longitude);
-          playerMarker.setLatLng(exactLatLng);
-
-          // Compute which grid cell the GPS position is in
-          const gpsCell = latLngToCell(latitude, longitude);
-
-          // If we haven't snapped yet, snap the logical player to this cell
-          if (!lastSnappedCell) {
-            lastSnappedCell = gpsCell;
-            const fly = CellFlyweightFactory.getFlyweight(gpsCell.i, gpsCell.j);
-            const center = fly.center;
-            // Snap map and marker to the canonical cell center
-            map.setView(center, GAMEPLAY_ZOOM_LEVEL);
-            playerMarker.setLatLng(center);
-            generateMap();
-            updateCacheProximity();
-            return;
-          }
-
-          // If GPS moved into a new cell, move the logical player by the delta
-          if (
-            gpsCell.i !== lastSnappedCell.i || gpsCell.j !== lastSnappedCell.j
-          ) {
-            const di = gpsCell.i - lastSnappedCell.i;
-            const dj = gpsCell.j - lastSnappedCell.j;
-
-            // Update snapped cell reference before moving to avoid race
-            lastSnappedCell = gpsCell;
-
-            // Use movePlayer so all game logic (proximity, mementos, caching)
-            // runs as if the player moved by grid steps.
-            movePlayer(di, dj);
-            return;
-          }
-
-          // If still in same cell, do not snap; keep showing exact GPS marker
-          // but do not recenter the map every update (avoids jitter).
-          // Optionally log for debugging.
-          // console.debug('Geolocation update (same cell):', latitude, longitude);
-        },
-        (error) => {
-          console.error("Geolocation error:", error);
-          alert("Geolocation error: " + error.message);
-          // Revert to buttons mode on error
-          currentMovementMode = "buttons";
-          toggleMovementButton.textContent = "Use Geolocation";
-          setMovementControlsEnabled(true);
-        },
-        {
-          enableHighAccuracy: true,
-          maximumAge: 5000,
-          timeout: 10000,
-        },
-      );
-    } else {
-      alert("Geolocation is not supported by this browser.");
-      // Revert to buttons mode
-      currentMovementMode = "buttons";
-      toggleMovementButton.textContent = "Use Geolocation";
-      setMovementControlsEnabled(true);
-    }
+  if (movementController) {
+    movementController.toggleMode();
+    currentMovementMode = movementController.getMode();
+    // Keep button text in sync (controller also updates it)
+    toggleMovementButton.textContent = currentMovementMode === "buttons"
+      ? "Use Geolocation"
+      : "Use Buttons";
   } else {
-    // Switch to buttons mode
-    currentMovementMode = "buttons";
-    toggleMovementButton.textContent = "Use Geolocation";
-
-    // Stop geolocation tracking
-    if (geolocationWatchId !== null) {
-      navigator.geolocation.clearWatch(geolocationWatchId);
-      geolocationWatchId = null;
-    }
-    _lastPosition = null;
-    geoStatusDiv.textContent = "Geolocation: inactive";
-    setMovementControlsEnabled(true);
+    alert("Movement controller not yet initialized.");
   }
 }
 
@@ -1212,7 +1121,13 @@ map.on("moveend", () => generateMap());
 
 // Helper used by the simulator and tests to reuse geolocation handling logic
 function simulatePosition(latitude: number, longitude: number) {
-  // reuse same logic as watchPosition callback (show marker, compute cell, snap)
+  // Delegate to MovementController if available so behavior is centralized
+  if (movementController) {
+    movementController.simulatePosition(latitude, longitude);
+    return;
+  }
+
+  // Fallback: reuse same logic as watchPosition callback (show marker, compute cell, snap)
   const exactLatLng = leaflet.latLng(latitude, longitude);
   playerMarker.setLatLng(exactLatLng);
 
@@ -1237,3 +1152,14 @@ function simulatePosition(latitude: number, longitude: number) {
     return;
   }
 }
+
+// Instantiate MovementController facade so main game code talks through an interface
+movementController = new MovementController({
+  map,
+  playerMarker,
+  movePlayer: (di: number, dj: number) => movePlayer(di, dj),
+  setMovementControlsEnabled,
+  geoStatusDiv,
+  toggleButton: toggleMovementButton,
+  latLngToCell,
+});
