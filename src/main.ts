@@ -321,9 +321,13 @@ setMovementControlsEnabled(true);
 
 // Move the player by grid steps (di, dj) where di is change in i (lat), dj in j (lng)
 function movePlayer(di: number, dj: number) {
-  const center = map.getCenter();
-  const newLat = center.lat + di * TILE_DEGREES;
-  const newLng = center.lng + dj * TILE_DEGREES;
+  // Use the player's current world position as the movement origin so
+  // panning the viewport (moving the screen) does not change where the
+  // player actually is. Fallback to the map center if the marker has no
+  // position for any reason.
+  const origin = playerMarker.getLatLng() || map.getCenter();
+  const newLat = origin.lat + di * TILE_DEGREES;
+  const newLng = origin.lng + dj * TILE_DEGREES;
   const newCenter = leaflet.latLng(newLat, newLng);
 
   // Recenter map and update player marker
