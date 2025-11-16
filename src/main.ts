@@ -123,6 +123,8 @@ function toggleMovementMode() {
     // Switch to geolocation mode
     currentMovementMode = "geolocation";
     toggleMovementButton.textContent = "Use Buttons";
+    // Disable on-screen movement buttons while geolocation is active
+    setMovementControlsEnabled(false);
 
     // Start geolocation tracking
     if (navigator.geolocation) {
@@ -191,6 +193,7 @@ function toggleMovementMode() {
           // Revert to buttons mode on error
           currentMovementMode = "buttons";
           toggleMovementButton.textContent = "Use Geolocation";
+          setMovementControlsEnabled(true);
         },
         {
           enableHighAccuracy: true,
@@ -203,6 +206,7 @@ function toggleMovementMode() {
       // Revert to buttons mode
       currentMovementMode = "buttons";
       toggleMovementButton.textContent = "Use Geolocation";
+      setMovementControlsEnabled(true);
     }
   } else {
     // Switch to buttons mode
@@ -216,6 +220,7 @@ function toggleMovementMode() {
     }
     _lastPosition = null;
     geoStatusDiv.textContent = "Geolocation: inactive";
+    setMovementControlsEnabled(true);
   }
 }
 
@@ -348,6 +353,21 @@ dpad.append(row);
 movementControls.append(dpad);
 controlPanelDiv.append(movementControls);
 
+// Enable/disable movement controls (buttons + visual state)
+function setMovementControlsEnabled(enabled: boolean) {
+  const buttons = [up, down, left, right];
+  buttons.forEach((b) => {
+    b.disabled = !enabled;
+    b.style.opacity = enabled ? "1" : "0.4";
+    b.style.pointerEvents = enabled ? "auto" : "none";
+    b.style.cursor = enabled ? "pointer" : "default";
+  });
+  movementControls.style.display = enabled ? "flex" : "none";
+}
+
+// Start with buttons enabled
+setMovementControlsEnabled(true);
+
 // Move the player by grid steps (di, dj) where di is change in i (lat), dj in j (lng)
 function movePlayer(di: number, dj: number) {
   const center = map.getCenter();
@@ -379,6 +399,8 @@ right.addEventListener("click", () => movePlayer(0, 1));
 
 // Add WASD key movement controls
 document.addEventListener("keydown", (event) => {
+  // Ignore key movement unless buttons mode is active
+  if (currentMovementMode !== "buttons") return;
   switch (event.key.toLowerCase()) {
     case "w":
       movePlayer(1, 0); // North

@@ -66,8 +66,8 @@ Key technical challenge: Can you assemble a map-based user interface using the L
 
 ### D3.d: Gameplay Across Real-world Space and Time
 
-- [ ] The browser geolocation API should be used to control player character movement instead of on-screen buttons
+- [x] The browser geolocation API should be used to control player character movement instead of on-screen buttons
 - [ ] The implementation of the new player movement control system should be hidden behind an interface so that most of the game code does not depend on what moves the character. This implementation should embody the Facade design pattern.
 - [ ] The browser localStorage API should be used to persist game state across page loads.
   - Even if the player closes the game's page, they should be able to continue gameplay from the same state by simply opening the page again.
-- [ ] The player needs some way to switch between button-based and geolocation-based movement.
+- [x] The player needs some way to switch between button-based and geolocation-based movement.
