@@ -304,6 +304,18 @@ dpad.append(row);
 movementControls.append(dpad);
 controlPanelDiv.append(movementControls);
 
+// Hint for keyboard controls so users know WASD also works
+const movementHint = document.createElement("div");
+movementHint.id = "movementHint";
+movementHint.textContent =
+  "Tip: You can also use WASD keys to move (works with movement buttons).";
+movementHint.style.cssText = `
+  margin-left: 10px;
+  font-size: 13px;
+  color: #333;
+`;
+controlPanelDiv.append(movementHint);
+
 // Enable/disable movement controls (buttons + visual state)
 function setMovementControlsEnabled(enabled: boolean) {
   const buttons = [up, down, left, right];

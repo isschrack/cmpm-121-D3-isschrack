@@ -10,6 +10,22 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
+/* Add consistent spacing between controls inside the panel */
+#controlPanel > * {
+  margin-bottom: 12px;
+}
+#controlPanel > *:last-child {
+  margin-bottom: 0;
+}
+
+/* Give movement controls more breathing room and slightly larger dpad spacing */
+#movementControls {
+  margin-bottom: 10px;
+}
+.dpad > div {
+  margin-top: 10px;
+}
+
 #statusPanel {
   padding: 1rem;
 }
