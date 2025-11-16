@@ -57,9 +57,17 @@ Key technical challenge: Can you assemble a map-based user interface using the L
 - [x] The game now requires that threshold to be reached for victory to be declared
 - [x] Add something to UI to show user the orders of rankings
 
-### D3.b: Globe-spanning Gameplay
+### D3.c: Globe-spanning Gameplay
 
-- [] Cells should appear to have a memory of their state that persists even when they are not visible on the map
+- [x] Cells should appear to have a memory of their state that persists even when they are not visible on the map
   - persistence across page loads is not yet required
   - [x] Cells should apply the Flyweight pattern or some similarly-effective memory-saving strategy so cells not visible on the map do not require memory for storage if they have not been modified by the player.
-  - [ ] Use the Memento pattern or some similarly-effective serialization strategy to preserve the state of modified cells when they scroll off-screen, and restore them when they return to view.
+  - [x] Use the Memento pattern or some similarly-effective serialization strategy to preserve the state of modified cells when they scroll off-screen, and restore them when they return to view.
+
+### D3.d: Gameplay Across Real-world Space and Time
+
+- [ ] The browser geolocation API should be used to control player character movement instead of on-screen buttons
+- [ ] The implementation of the new player movement control system should be hidden behind an interface so that most of the game code does not depend on what moves the character. This implementation should embody the Facade design pattern.
+- [ ] The browser localStorage API should be used to persist game state across page loads.
+  - Even if the player closes the game's page, they should be able to continue gameplay from the same state by simply opening the page again.
+- [ ] The player needs some way to switch between button-based and geolocation-based movement.
