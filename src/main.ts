@@ -689,7 +689,7 @@ function spawnCache(i: number, j: number) {
 
       if (playerToken) {
         // Can only craft when the held token is the same rank as the cache
-        const canCraft = playerToken.rankIndex === rankIndex;
+        const canCraft = playerToken.rankIndex === rankIndex && !isFarAway;
         popupDiv.innerHTML = `
       <div>Cell (${i},${j}) - ${name} (${value})</div>
       <button id="craft" ${
@@ -827,7 +827,7 @@ function showTokenDetails(
 
   if (playerToken) {
     // Can only craft when the held token is the same rank as the cache
-    const canCraft = playerToken.rankIndex === rankIndex;
+    const canCraft = playerToken.rankIndex === rankIndex && !isFarAway;
     popupDiv.innerHTML = `
       <div>Cell (${i},${j}) - ${name} (${value})</div>
       <button id="craft" ${
@@ -1111,7 +1111,8 @@ function updateCacheProximity() {
           const popupDiv = document.createElement("div");
 
           if (playerToken) {
-            const canCraft = playerToken.rankIndex === cache.rankIndex;
+            const canCraft = playerToken.rankIndex === cache.rankIndex &&
+              !cache.isFarAway;
             popupDiv.innerHTML = `
       <div>Cell (${cache.i},${cache.j}) - ${cache.name} (${cache.value})</div>
       <button id="craft" ${
