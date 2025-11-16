@@ -13,10 +13,15 @@ import luck from "./_luck.ts";
 
 // Import Flyweight pattern
 import {
+  CACHE_SPAWN_PROBABILITY,
   CellContext,
   CellFlyweightFactory,
   CellMemento,
+  CLASSROOM_LATLNG,
   MementoManager,
+  RANKS,
+  TILE_DEGREES,
+  VICTORY_VALUE,
 } from "./cellFlyweight.ts";
 import MovementController from "./movementFacade.ts";
 // Create basic UI elements
@@ -409,47 +414,10 @@ disclaimerDiv.style.cssText = `
 `;
 document.body.insertBefore(disclaimerDiv, statusPanelDiv);
 
-// Our classroom location
-const CLASSROOM_LATLNG = leaflet.latLng(
-  36.997936938057016,
-  -122.05703507501151,
-);
-
+// Shared constants imported from `cellFlyweight.ts`:
+// - `CLASSROOM_LATLNG`, `TILE_DEGREES`, `CACHE_SPAWN_PROBABILITY`, `RANKS`, `VICTORY_VALUE`
 // Tunable gameplay parameters
 const GAMEPLAY_ZOOM_LEVEL = 19;
-const TILE_DEGREES = 1e-4;
-const CACHE_SPAWN_PROBABILITY = 0.1;
-// How many tiles from the player to consider for generation (anchors to player)
-// NOTE: visibility is now based on actual map viewport bounds.
-
-// Global rank definitions so spawn and proximity logic share the same progression
-const RANKS = [
-  { name: "Common", value: 2 },
-  { name: "Uncommon", value: 4 },
-  { name: "Rare", value: 8 },
-  { name: "Epic", value: 16 },
-  { name: "Legendary", value: 32 },
-  { name: "Mythic", value: 64 },
-  { name: "Ascendant", value: 128 },
-  { name: "Exalted", value: 256 },
-  { name: "Exotic", value: 512 },
-  { name: "Transcendent", value: 1024 },
-  { name: "Divine", value: 2048 },
-  { name: "Ancestral", value: 4096 },
-];
-// Value required to win. Use the top rank's numeric value by default so changing
-// the rank table automatically adjusts the victory threshold.
-const VICTORY_VALUE = RANKS[RANKS.length - 1].value;
-
-// Precomputed weights for each rank (inverse of value for lower values to be more common)
-const RANK_WEIGHTS: number[] = [];
-let totalWeight = 0;
-for (let i = 0; i < RANKS.length; i++) {
-  // Using inverse of value as weight to make lower values more common
-  const weight = 1 / RANKS[i].value;
-  RANK_WEIGHTS.push(weight);
-  totalWeight += weight;
-}
 
 // Create the map
 const map = leaflet.map(mapDiv, {

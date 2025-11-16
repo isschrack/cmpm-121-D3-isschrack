@@ -1,4 +1,3 @@
-// deno-lint-ignore-file no-explicit-any
 // @deno-types="npm:@types/leaflet"
 import leaflet from "leaflet";
 
@@ -6,9 +5,9 @@ import { CellFlyweightFactory } from "./cellFlyweight.ts";
 
 export type MovementMode = "buttons" | "geolocation";
 
-type Options = {
-  map: any;
-  playerMarker: any;
+export type MovementOptions = {
+  map: leaflet.Map;
+  playerMarker: leaflet.Marker;
   movePlayer: (di: number, dj: number) => void;
   setMovementControlsEnabled: (enabled: boolean) => void;
   geoStatusDiv?: HTMLElement | null;
@@ -17,8 +16,8 @@ type Options = {
 };
 
 export class MovementController {
-  private map: any;
-  private playerMarker: any;
+  private map: leaflet.Map;
+  private playerMarker: leaflet.Marker;
   private movePlayerCb: (di: number, dj: number) => void;
   private setMovementControlsEnabled: (enabled: boolean) => void;
   private geoStatusDiv: HTMLElement | null;
@@ -29,7 +28,7 @@ export class MovementController {
   private watchId: number | null = null;
   private lastSnappedCell: { i: number; j: number } | null = null;
 
-  constructor(opts: Options) {
+  constructor(opts: MovementOptions) {
     this.map = opts.map;
     this.playerMarker = opts.playerMarker;
     this.movePlayerCb = opts.movePlayer;
@@ -61,7 +60,7 @@ export class MovementController {
     this.setMovementControlsEnabled(false);
     if (this.toggleButton) this.toggleButton.textContent = "Use Buttons";
 
-    // Start watching position
+    // Start watching position (use optional chaining for environments without geolocation)
     this.watchId = navigator.geolocation.watchPosition(
       (position) => this.handlePosition(position),
       (error) => {
@@ -74,7 +73,7 @@ export class MovementController {
   }
 
   stopGeolocation() {
-    if (this.watchId !== null && navigator.geolocation.clearWatch) {
+    if (this.watchId !== null) {
       navigator.geolocation.clearWatch(this.watchId);
     }
     this.watchId = null;
@@ -91,16 +90,10 @@ export class MovementController {
     const { latitude, longitude } = position.coords;
 
     if (this.geoStatusDiv) {
-      try {
-        const acc = position.coords.accuracy;
-        this.geoStatusDiv.textContent = `Geolocation: ${latitude.toFixed(6)}, ${
-          longitude.toFixed(6)
-        } (±${acc}m)`;
-      } catch {
-        this.geoStatusDiv.textContent = `Geolocation: ${latitude.toFixed(6)}, ${
-          longitude.toFixed(6)
-        }`;
-      }
+      const acc = position.coords.accuracy;
+      this.geoStatusDiv.textContent = `Geolocation: ${latitude.toFixed(6)}, ${
+        longitude.toFixed(6)
+      }${typeof acc === "number" ? ` (±${acc}m)` : ""}`;
     }
 
     // Show exact GPS position on marker
@@ -113,7 +106,10 @@ export class MovementController {
       this.lastSnappedCell = gpsCell;
       const fly = CellFlyweightFactory.getFlyweight(gpsCell.i, gpsCell.j);
       const center = fly.center;
-      this.map.setView(center, (this.map.getZoom && this.map.getZoom()) || 19);
+      const zoom = typeof this.map.getZoom === "function"
+        ? this.map.getZoom()
+        : 19;
+      this.map.setView(center, zoom);
       this.playerMarker.setLatLng(center);
       // Let the game-level code refresh caches/proximity after a snap by calling movePlayer with 0,0
       this.movePlayerCb(0, 0);

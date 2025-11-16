@@ -2,13 +2,13 @@
 import leaflet from "leaflet";
 import luck from "./_luck.ts";
 
-// Constants
-const TILE_DEGREES = 1e-4;
-const CLASSROOM_LATLNG = leaflet.latLng(
+// Constants (exported so main and other modules share the same values)
+export const TILE_DEGREES = 1e-4;
+export const CLASSROOM_LATLNG = leaflet.latLng(
   36.997936938057016,
   -122.05703507501151,
 );
-const CACHE_SPAWN_PROBABILITY = 0.1;
+export const CACHE_SPAWN_PROBABILITY = 0.1;
 
 // Global rank definitions
 export const RANKS = [
@@ -26,7 +26,7 @@ export const RANKS = [
   { name: "Ancestral", value: 4096 },
 ];
 
-// Precomputed weights for each rank
+// Precomputed weights for each rank (used by the weighted selection helper)
 const RANK_WEIGHTS: number[] = [];
 let totalWeight = 0;
 for (let i = 0; i < RANKS.length; i++) {
@@ -34,6 +34,9 @@ for (let i = 0; i < RANKS.length; i++) {
   RANK_WEIGHTS.push(weight);
   totalWeight += weight;
 }
+
+// Convenience export: value required to win (top rank's numeric value)
+export const VICTORY_VALUE = RANKS[RANKS.length - 1].value;
 
 // Function to get a weighted random rank index
 export function getWeightedRankIndex(seed: string): number {
