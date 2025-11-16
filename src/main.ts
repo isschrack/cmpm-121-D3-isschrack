@@ -23,6 +23,51 @@ const controlPanelDiv = document.createElement("div");
 controlPanelDiv.id = "controlPanel";
 document.body.append(controlPanelDiv);
 
+// Geolocation status display (shows raw GPS coords and accuracy)
+const geoStatusDiv = document.createElement("div");
+geoStatusDiv.id = "geoStatus";
+geoStatusDiv.style.cssText = `
+  margin-left: 10px;
+  padding: 6px 10px;
+  background: #f1f1f1;
+  border-radius: 4px;
+  font-size: 12px;
+`;
+geoStatusDiv.textContent = "Geolocation: inactive";
+controlPanelDiv.append(geoStatusDiv);
+
+// Manual location simulator (for debugging/testing when GPS is unavailable)
+const mockContainer = document.createElement("div");
+mockContainer.style.cssText =
+  `display:flex; gap:6px; align-items:center; margin-left:10px;`;
+const mockLatInput = document.createElement("input");
+mockLatInput.placeholder = "lat";
+mockLatInput.style.width = "110px";
+const mockLngInput = document.createElement("input");
+mockLngInput.placeholder = "lng";
+mockLngInput.style.width = "110px";
+const mockBtn = document.createElement("button");
+mockBtn.textContent = "Simulate Location";
+mockBtn.type = "button";
+mockBtn.addEventListener("click", () => {
+  const lat = parseFloat(mockLatInput.value);
+  const lng = parseFloat(mockLngInput.value);
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    simulatePosition(lat, lng);
+  } else {
+    alert("Enter valid numeric lat and lng to simulate.");
+  }
+});
+mockContainer.append(mockLatInput, mockLngInput, mockBtn);
+controlPanelDiv.append(mockContainer);
+
+// Movement mode tracking
+type MovementMode = "buttons" | "geolocation";
+let currentMovementMode: MovementMode = "buttons";
+let geolocationWatchId: number | null = null;
+let _lastPosition: { lat: number; lng: number } | null = null;
+let lastSnappedCell: { i: number; j: number } | null = null;
+
 // Add a button to show rankings
 const rankingsButton = document.createElement("button");
 rankingsButton.id = "rankingsButton";
@@ -40,6 +85,23 @@ rankingsButton.style.cssText = `
 rankingsButton.addEventListener("click", showRankings);
 controlPanelDiv.append(rankingsButton);
 
+// Add a button to toggle movement mode
+const toggleMovementButton = document.createElement("button");
+toggleMovementButton.id = "toggleMovement";
+toggleMovementButton.textContent = "Use Geolocation";
+toggleMovementButton.type = "button";
+toggleMovementButton.style.cssText = `
+  margin-left: 10px;
+  padding: 8px 16px;
+  background: #2196F3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+`;
+toggleMovementButton.addEventListener("click", toggleMovementMode);
+controlPanelDiv.append(toggleMovementButton);
+
 // Movement controls (N/S/E/W) to move the local player one grid step
 const movementControls = document.createElement("div");
 movementControls.id = "movementControls";
@@ -54,6 +116,108 @@ const btn = (id: string, label: string) => {
   b.type = "button";
   return b;
 };
+
+// Function to toggle between movement modes
+function toggleMovementMode() {
+  if (currentMovementMode === "buttons") {
+    // Switch to geolocation mode
+    currentMovementMode = "geolocation";
+    toggleMovementButton.textContent = "Use Buttons";
+
+    // Start geolocation tracking
+    if (navigator.geolocation) {
+      // Request high-accuracy position updates
+      geolocationWatchId = navigator.geolocation.watchPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+
+          // Update the on-screen geolocation debug/status info so the
+          // user can see what the browser is actually returning.
+          try {
+            const acc = position.coords.accuracy;
+            geoStatusDiv.textContent = `Geolocation: ${latitude.toFixed(6)}, ${
+              longitude.toFixed(6)
+            } (±${acc}m)`;
+          } catch (_e) {
+            geoStatusDiv.textContent = `Geolocation: ${latitude.toFixed(6)}, ${
+              longitude.toFixed(6)
+            }`;
+          }
+
+          // Show exact GPS position immediately so the user sees themselves
+          const exactLatLng = leaflet.latLng(latitude, longitude);
+          playerMarker.setLatLng(exactLatLng);
+
+          // Compute which grid cell the GPS position is in
+          const gpsCell = latLngToCell(latitude, longitude);
+
+          // If we haven't snapped yet, snap the logical player to this cell
+          if (!lastSnappedCell) {
+            lastSnappedCell = gpsCell;
+            const fly = CellFlyweightFactory.getFlyweight(gpsCell.i, gpsCell.j);
+            const center = fly.center;
+            // Snap map and marker to the canonical cell center
+            map.setView(center, GAMEPLAY_ZOOM_LEVEL);
+            playerMarker.setLatLng(center);
+            generateMap();
+            updateCacheProximity();
+            return;
+          }
+
+          // If GPS moved into a new cell, move the logical player by the delta
+          if (
+            gpsCell.i !== lastSnappedCell.i || gpsCell.j !== lastSnappedCell.j
+          ) {
+            const di = gpsCell.i - lastSnappedCell.i;
+            const dj = gpsCell.j - lastSnappedCell.j;
+
+            // Update snapped cell reference before moving to avoid race
+            lastSnappedCell = gpsCell;
+
+            // Use movePlayer so all game logic (proximity, mementos, caching)
+            // runs as if the player moved by grid steps.
+            movePlayer(di, dj);
+            return;
+          }
+
+          // If still in same cell, do not snap; keep showing exact GPS marker
+          // but do not recenter the map every update (avoids jitter).
+          // Optionally log for debugging.
+          // console.debug('Geolocation update (same cell):', latitude, longitude);
+        },
+        (error) => {
+          console.error("Geolocation error:", error);
+          alert("Geolocation error: " + error.message);
+          // Revert to buttons mode on error
+          currentMovementMode = "buttons";
+          toggleMovementButton.textContent = "Use Geolocation";
+        },
+        {
+          enableHighAccuracy: true,
+          maximumAge: 5000,
+          timeout: 10000,
+        },
+      );
+    } else {
+      alert("Geolocation is not supported by this browser.");
+      // Revert to buttons mode
+      currentMovementMode = "buttons";
+      toggleMovementButton.textContent = "Use Geolocation";
+    }
+  } else {
+    // Switch to buttons mode
+    currentMovementMode = "buttons";
+    toggleMovementButton.textContent = "Use Geolocation";
+
+    // Stop geolocation tracking
+    if (geolocationWatchId !== null) {
+      navigator.geolocation.clearWatch(geolocationWatchId);
+      geolocationWatchId = null;
+    }
+    _lastPosition = null;
+    geoStatusDiv.textContent = "Geolocation: inactive";
+  }
+}
 
 // Function to show rankings in a modal
 function showRankings() {
@@ -1023,3 +1187,31 @@ generateMap();
 // Regenerate viewport caches when the user pans/zooms the map so unreachable tokens
 // become visible; do NOT update cache proximity here (that only happens on player move).
 map.on("moveend", () => generateMap());
+
+// Helper used by the simulator and tests to reuse geolocation handling logic
+function simulatePosition(latitude: number, longitude: number) {
+  // reuse same logic as watchPosition callback (show marker, compute cell, snap)
+  const exactLatLng = leaflet.latLng(latitude, longitude);
+  playerMarker.setLatLng(exactLatLng);
+
+  const gpsCell = latLngToCell(latitude, longitude);
+
+  if (!lastSnappedCell) {
+    lastSnappedCell = gpsCell;
+    const fly = CellFlyweightFactory.getFlyweight(gpsCell.i, gpsCell.j);
+    const center = fly.center;
+    map.setView(center, GAMEPLAY_ZOOM_LEVEL);
+    playerMarker.setLatLng(center);
+    generateMap();
+    updateCacheProximity();
+    return;
+  }
+
+  if (gpsCell.i !== lastSnappedCell.i || gpsCell.j !== lastSnappedCell.j) {
+    const di = gpsCell.i - lastSnappedCell.i;
+    const dj = gpsCell.j - lastSnappedCell.j;
+    lastSnappedCell = gpsCell;
+    movePlayer(di, dj);
+    return;
+  }
+}
